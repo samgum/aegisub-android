@@ -1,0 +1,68 @@
+<resources>
+    <!-- 编辑器主标题与动作 -->
+    <string name="editor_list_title">字幕列表</string>
+    <string name="editor_list_empty">该工程暂无字幕行\n点右下角 + 新建，或顶栏导入</string>
+    <string name="editor_preview">预览</string>
+    <string name="editor_export">导出</string>
+    <string name="editor_undo">撤销</string>
+    <string name="editor_redo">重做</string>
+    <string name="editor_back">返回</string>
+    <string name="editor_toolbox">批量工具</string>
+
+    <!-- 编辑底栏 -->
+    <string name="edit_subtitle">编辑字幕</string>
+    <string name="edit_detail">详情</string>
+    <string name="edit_text">文本</string>
+    <string name="edit_start">开始</string>
+    <string name="edit_end">结束</string>
+    <string name="edit_style">样式</string>
+    <string name="edit_layer">层</string>
+    <string name="edit_line_actions">行操作</string>
+
+    <!-- 行操作 -->
+    <string name="action_move_up">上移</string>
+    <string name="action_move_down">下移</string>
+    <string name="action_duplicate">复制</string>
+    <string name="action_insert_before">前插</string>
+    <string name="action_insert_after">后插</string>
+    <string name="action_split">分割</string>
+    <string name="action_join">合并</string>
+    <string name="action_delete">删除</string>
+
+    <!-- 工具箱入口 -->
+    <string name="tool_find_replace">查找替换</string>
+    <string name="tool_find_replace_desc">正则 / 忽略大小写，全部替换（一次撤销）</string>
+    <string name="tool_shift_times">时间偏移</string>
+    <string name="tool_shift_times_desc">整体前移/后移，可仅作用于选中行之后</string>
+    <string name="tool_sort">排序</string>
+    <string name="tool_sort_desc">按起始/结束/样式/演员/效果/文本/层，升降序</string>
+    <string name="tool_framerate">帧率转换</string>
+    <string name="tool_framerate_desc">按 to/from 帧率等比缩放全部时间（24↔25↔30 等）</string>
+    <string name="tool_properties">脚本属性</string>
+    <string name="tool_properties_desc">编辑分辨率 / 换行样式 / 碰撞 / 缩放描边 / 计时速度</string>
+    <string name="tool_styling">样式助手</string>
+    <string name="tool_styling_desc">逐行浏览字幕，点选样式快速分配并自动前进</string>
+    <string name="tool_translation">翻译助手</string>
+    <string name="tool_translation_desc">逐行原文→译文：原文存 Name，译文存 Text，自动前进</string>
+    <string name="tool_karaoke">卡拉OK生成</string>
+    <string name="tool_karaoke_desc">把选中行切成音节并均匀分配时长，生成 {\\k}/{\\kf} 标签</string>
+    <string name="tool_timing_pp">时间后处理</string>
+    <string name="tool_timing_pp_desc">lead-in/out 提前起始延后结束 + 去重叠强制最小间隙</string>
+    <string name="tool_resample">分辨率重采样</string>
+    <string name="tool_resample_desc">改 PlayRes 并按比例缩放 \\pos/字号/边距（如 384×288→1920×1080）</string>
+    <string name="tool_delete_empty">删除空行</string>
+    <string name="tool_delete_empty_desc">移除纯空 / 仅标签的行，保留绘图行</string>
+    <string name="tool_style_replace">样式批量替换</string>
+    <string name="tool_style_replace_desc">把指定样式名的事件改为另一样式</string>
+    <string name="tool_style_manager">样式管理器</string>
+    <string name="tool_style_manager_desc">编辑颜色 / 字体 / 描边 / 对齐 / 边距 / 编码</string>
+    <string name="tool_history">历史版本</string>
+    <string name="tool_history_desc">保存当前为快照 / 恢复到过往版本（可撤销）</string>
+
+    <!-- 通用按钮 -->
+    <string name="common_apply">应用</string>
+    <string name="common_cancel">取消</string>
+    <string name="common_ok">确定</string>
+    <string name="common_delete">删除</string>
+    <string name="common_replace_all">全部替换</string>
+</resources>

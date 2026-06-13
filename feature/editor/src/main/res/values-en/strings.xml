@@ -1,0 +1,68 @@
+<resources>
+    <!-- Editor main -->
+    <string name="editor_list_title">Subtitles</string>
+    <string name="editor_list_empty">No subtitle lines yet.\nUse the line actions or import to add some.</string>
+    <string name="editor_preview">Preview</string>
+    <string name="editor_export">Export</string>
+    <string name="editor_undo">Undo</string>
+    <string name="editor_redo">Redo</string>
+    <string name="editor_back">Back</string>
+    <string name="editor_toolbox">Tools</string>
+
+    <!-- Edit sheet -->
+    <string name="edit_subtitle">Edit subtitle</string>
+    <string name="edit_detail">Details</string>
+    <string name="edit_text">Text</string>
+    <string name="edit_start">Start</string>
+    <string name="edit_end">End</string>
+    <string name="edit_style">Style</string>
+    <string name="edit_layer">Layer</string>
+    <string name="edit_line_actions">Line actions</string>
+
+    <!-- Line actions -->
+    <string name="action_move_up">Up</string>
+    <string name="action_move_down">Down</string>
+    <string name="action_duplicate">Dup</string>
+    <string name="action_insert_before">Ins·B</string>
+    <string name="action_insert_after">Ins·A</string>
+    <string name="action_split">Split</string>
+    <string name="action_join">Join</string>
+    <string name="action_delete">Del</string>
+
+    <!-- Toolbox entries -->
+    <string name="tool_find_replace">Find &amp; Replace</string>
+    <string name="tool_find_replace_desc">Regex / case-insensitive, replace all (one undo)</string>
+    <string name="tool_shift_times">Shift Times</string>
+    <string name="tool_shift_times_desc">Move all times forward/back, optionally after selection</string>
+    <string name="tool_sort">Sort Lines</string>
+    <string name="tool_sort_desc">By start/end/style/actor/effect/text/layer, asc/desc</string>
+    <string name="tool_framerate">Change Framerate</string>
+    <string name="tool_framerate_desc">Rescale all times by to/from fps (24↔25↔30 etc.)</string>
+    <string name="tool_properties">Properties</string>
+    <string name="tool_properties_desc">Resolution / wrap style / collisions / scaled border / timer</string>
+    <string name="tool_styling">Styling Assistant</string>
+    <string name="tool_styling_desc">Browse lines and assign styles, auto-advance</string>
+    <string name="tool_translation">Translation Assistant</string>
+    <string name="tool_translation_desc">Original→Name, translation→Text, auto-advance</string>
+    <string name="tool_karaoke">Karaoke</string>
+    <string name="tool_karaoke_desc">Split selected line into syllables, even timing, {\\k}/{\\kf}</string>
+    <string name="tool_timing_pp">Timing Post-Processor</string>
+    <string name="tool_timing_pp_desc">Lead-in/out + overlap removal with minimum gap</string>
+    <string name="tool_resample">Resolution Resampler</string>
+    <string name="tool_resample_desc">Change PlayRes and scale \\pos/font/margins (e.g. 384×288→1920×1080)</string>
+    <string name="tool_delete_empty">Delete Empty Lines</string>
+    <string name="tool_delete_empty_desc">Remove blank / tag-only lines, keep drawings</string>
+    <string name="tool_style_replace">Style Replace</string>
+    <string name="tool_style_replace_desc">Change events of one style to another</string>
+    <string name="tool_style_manager">Styles Manager</string>
+    <string name="tool_style_manager_desc">Edit color / font / outline / align / margin / encoding</string>
+    <string name="tool_history">History</string>
+    <string name="tool_history_desc">Save snapshot / restore a past version (undoable)</string>
+
+    <!-- Common -->
+    <string name="common_apply">Apply</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_ok">OK</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_replace_all">Replace all</string>
+</resources>

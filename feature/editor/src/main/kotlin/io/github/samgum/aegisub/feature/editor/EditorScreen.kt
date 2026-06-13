@@ -59,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -70,6 +71,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toPersistentList
 import io.github.samgum.aegisub.data.settings.LayoutMode
+import io.github.samgum.aegisub.feature.editor.R
 import io.github.samgum.aegisub.domain.edit.FramerateConverter
 import io.github.samgum.aegisub.domain.edit.KaraokeMode
 import io.github.samgum.aegisub.domain.edit.ScriptInfoOps
@@ -597,46 +599,46 @@ private fun ToolboxSheet(
         )
         LazyColumn(modifier = Modifier.fillMaxWidth()) {
             item {
-                ToolEntry(Icons.Filled.Search, "查找替换", "正则 / 忽略大小写，全部替换（一次撤销）") { onFindReplace() }
+                ToolEntry(Icons.Filled.Search, stringResource(R.string.tool_find_replace), stringResource(R.string.tool_find_replace_desc)) { onFindReplace() }
             }
             item {
-                ToolEntry(Icons.AutoMirrored.Filled.ArrowForward, "时间偏移", "整体前移/后移，可仅作用于选中行之后") { onShiftTimes() }
+                ToolEntry(Icons.AutoMirrored.Filled.ArrowForward, stringResource(R.string.tool_shift_times), stringResource(R.string.tool_shift_times_desc)) { onShiftTimes() }
             }
             item {
-                ToolEntry(Icons.AutoMirrored.Filled.Sort, "排序", "按起始/结束/样式/演员/效果/文本/层，升降序") { onSort() }
+                ToolEntry(Icons.AutoMirrored.Filled.Sort, stringResource(R.string.tool_sort), stringResource(R.string.tool_sort_desc)) { onSort() }
             }
             item {
-                ToolEntry(Icons.Filled.Movie, "帧率转换", "按 to/from 帧率等比缩放全部时间（24↔25↔30 等）") { onFramerate() }
+                ToolEntry(Icons.Filled.Movie, stringResource(R.string.tool_framerate), stringResource(R.string.tool_framerate_desc)) { onFramerate() }
             }
             item {
-                ToolEntry(Icons.Filled.Settings, "脚本属性", "编辑分辨率 / 换行样式 / 碰撞 / 缩放描边 / 计时速度") { onProperties() }
+                ToolEntry(Icons.Filled.Settings, stringResource(R.string.tool_properties), stringResource(R.string.tool_properties_desc)) { onProperties() }
             }
             item {
-                ToolEntry(Icons.Filled.Delete, "删除空行", "移除纯空 / 仅标签的行，保留绘图行") { onDeleteEmpty() }
+                ToolEntry(Icons.Filled.Delete, stringResource(R.string.tool_delete_empty), stringResource(R.string.tool_delete_empty_desc)) { onDeleteEmpty() }
             }
             item {
-                ToolEntry(Icons.Filled.Edit, "样式批量替换", "把指定样式名的事件改为另一样式") { onStyleReplace() }
+                ToolEntry(Icons.Filled.Edit, stringResource(R.string.tool_style_replace), stringResource(R.string.tool_style_replace_desc)) { onStyleReplace() }
             }
             item {
-                ToolEntry(Icons.Filled.Build, "样式管理器", "编辑颜色 / 字体 / 描边 / 对齐 / 边距 / 编码") { onOpenStyleManager() }
+                ToolEntry(Icons.Filled.Build, stringResource(R.string.tool_style_manager), stringResource(R.string.tool_style_manager_desc)) { onOpenStyleManager() }
             }
             item {
-                ToolEntry(Icons.Filled.Palette, "样式助手", "逐行浏览字幕，点选样式快速分配并自动前进") { onStyling() }
+                ToolEntry(Icons.Filled.Palette, stringResource(R.string.tool_styling), stringResource(R.string.tool_styling_desc)) { onStyling() }
             }
             item {
-                ToolEntry(Icons.Filled.Translate, "翻译助手", "逐行原文→译文：原文存 Name，译文存 Text，自动前进") { onTranslation() }
+                ToolEntry(Icons.Filled.Translate, stringResource(R.string.tool_translation), stringResource(R.string.tool_translation_desc)) { onTranslation() }
             }
             item {
-                ToolEntry(Icons.Filled.MusicNote, "卡拉OK生成", "把选中行切成音节并均匀分配时长，生成 {\\k}/{\\kf} 标签") { onKaraoke() }
+                ToolEntry(Icons.Filled.MusicNote, stringResource(R.string.tool_karaoke), stringResource(R.string.tool_karaoke_desc)) { onKaraoke() }
             }
             item {
-                ToolEntry(Icons.Filled.Timer, "时间后处理", "lead-in/out 提前起始延后结束 + 去重叠强制最小间隙") { onTimingPP() }
+                ToolEntry(Icons.Filled.Timer, stringResource(R.string.tool_timing_pp), stringResource(R.string.tool_timing_pp_desc)) { onTimingPP() }
             }
             item {
-                ToolEntry(Icons.Filled.AspectRatio, "分辨率重采样", "改 PlayRes 并按比例缩放 \\pos/字号/边距（如 384×288→1920×1080）") { onResample() }
+                ToolEntry(Icons.Filled.AspectRatio, stringResource(R.string.tool_resample), stringResource(R.string.tool_resample_desc)) { onResample() }
             }
             item {
-                ToolEntry(Icons.Filled.PlayArrow, "历史版本", "保存当前为快照 / 恢复到过往版本（可撤销）") { onOpenHistory() }
+                ToolEntry(Icons.Filled.PlayArrow, stringResource(R.string.tool_history), stringResource(R.string.tool_history_desc)) { onOpenHistory() }
             }
             item { HorizontalDivider() }
         }
