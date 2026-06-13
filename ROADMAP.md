@@ -2,7 +2,7 @@
 
 > 滚动更新。每完成一个 Phase 提交 Commit 并更新本文件与 README。
 
-## 当前状态：✅ Phase 0/1/2/3 + 文件 I/O + 图标 + 预览可写化（共享 ProjectSession）。预览屏可选中行并拖滑块/微调调起止时间，与编辑器共享撤销栈，改动实时同步两端 + 防抖落盘。剩余 Phase 1：DataStore 设置；下一步 Phase 4（音频波形/打轴辅助：拖拽手柄、波形提取）。
+## 当前状态：✅ Phase 0/1/2/3 + 文件 I/O + 图标 + 预览可写化 + DataStore 主题。预览屏可选中行并拖滑块/微调调起止时间，与编辑器共享撤销栈，改动实时同步两端 + 防抖落盘；设置屏可切主题（跟随系统/浅/深）持久化。下一步 Phase 2 键盘快捷键 + Phase 4（音频波形/打轴辅助）。
 
 ---
 
@@ -24,7 +24,7 @@
 - [x] Room：项目实体 / DAO / Database + `RoomProjectRepository`（含假 DAO 单测）
 - [x] Hilt DI 接线 + 应用入口（`@HiltAndroidApp` + `DataModule`）
 - [x] 项目列表 UI（LazyColumn + 新建 FAB，`assembleDebug` 出 9.7M APK）
-- [ ] DataStore：用户偏好（默认精度、布局、主题）— 待办
+- [x] DataStore：用户偏好持久化（主题：跟随系统/浅/深；精度/布局待扩展）
 - [x] 编辑防抖自动保存（Coroutines Flow debounce，Phase 2 落地）；WorkManager 后台保命保存 — 待办
 - [ ] 历史版本表 — 待办（Phase 7 深化）
 

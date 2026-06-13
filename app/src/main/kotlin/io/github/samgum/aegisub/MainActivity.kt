@@ -4,12 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.material3.MaterialTheme
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.samgum.aegisub.navigation.AppNavigation
 
 /**
- * 应用入口。Hilt 注入 + Compose 启动到导航图。
+ * 应用入口。Hilt 注入 + Compose 启动到导航图（主题在 AppNavigation 内按用户偏好套用）。
  *
  * @author 伤感咩吖
  */
@@ -19,9 +18,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
-                AppNavigation()
-            }
+            AppNavigation()
         }
     }
 }

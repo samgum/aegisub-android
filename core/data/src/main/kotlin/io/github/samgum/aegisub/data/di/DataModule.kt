@@ -1,6 +1,9 @@
 package io.github.samgum.aegisub.data.di
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import dagger.Module
 import dagger.Provides
@@ -11,10 +14,15 @@ import io.github.samgum.aegisub.data.local.ProjectDao
 import io.github.samgum.aegisub.data.local.SubtitleDatabase
 import io.github.samgum.aegisub.data.repository.ProjectRepository
 import io.github.samgum.aegisub.data.repository.RoomProjectRepository
+import io.github.samgum.aegisub.data.settings.DataStoreSettingsRepository
+import io.github.samgum.aegisub.data.settings.SettingsRepository
 import javax.inject.Singleton
 
+/** 设置 DataStore 单例（应用级，name=settings）。 */
+private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+
 /**
- * Hilt 依赖注入：提供 Room 数据库、DAO、仓储的单例。
+ * Hilt 依赖注入：提供 Room 数据库、DAO、仓储、设置 DataStore 的单例。
  *
  * @author 伤感咩吖
  */
@@ -35,4 +43,14 @@ object DataModule {
     @Provides
     @Singleton
     fun provideProjectRepository(dao: ProjectDao): ProjectRepository = RoomProjectRepository(dao)
+
+    @Provides
+    @Singleton
+    fun provideSettingsDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
+        context.settingsDataStore
+
+    @Provides
+    @Singleton
+    fun provideSettingsRepository(store: DataStore<Preferences>): SettingsRepository =
+        DataStoreSettingsRepository(store)
 }
