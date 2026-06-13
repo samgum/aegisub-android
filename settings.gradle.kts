@@ -12,4 +12,5 @@ rootProject.name = "aegisub-android"
 include(":core:domain")
 include(":core:data")
 include(":feature:editor")
+include(":feature:preview")
 include(":app")
