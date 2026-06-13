@@ -2,6 +2,7 @@ package io.github.samgum.aegisub.data.session
 
 import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.model.AssScript
+import io.github.samgum.aegisub.domain.model.AssStyle
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -33,6 +34,9 @@ interface ProjectSession {
 
     /** 对整个事件列表应用任意变换（可增删、改顺序），一次提交（一个撤销点，用于删除空行/时间偏移等）。 */
     fun editEvents(transform: (List<AssEvent>) -> List<AssEvent>)
+
+    /** 对整个样式列表应用任意变换（增删改），一次提交（一个撤销点，用于样式编辑器）。 */
+    fun editStyles(transform: (List<AssStyle>) -> List<AssStyle>)
 
     fun undo()
     fun redo()

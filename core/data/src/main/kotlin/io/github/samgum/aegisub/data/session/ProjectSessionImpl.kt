@@ -5,6 +5,7 @@ import io.github.samgum.aegisub.domain.format.AssFormat
 import io.github.samgum.aegisub.domain.format.FormatRegistry
 import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.model.AssScript
+import io.github.samgum.aegisub.domain.model.AssStyle
 import io.github.samgum.aegisub.domain.undo.SnapshotUndoStack
 import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.CoroutineScope
@@ -106,6 +107,13 @@ internal class ProjectSessionImpl(
         val current = s.current
         val newEvents = transform(current.events).toPersistentList()
         commit(current.withEvents(newEvents))
+    }
+
+    override fun editStyles(transform: (List<AssStyle>) -> List<AssStyle>) {
+        val s = stack ?: return
+        val current = s.current
+        val newStyles = transform(current.styles).toPersistentList()
+        commit(current.withStyles(newStyles))
     }
 
     private fun commit(newScript: AssScript) {

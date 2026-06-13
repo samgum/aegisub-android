@@ -9,6 +9,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import io.github.samgum.aegisub.feature.editor.navigation.editorRoute
 import io.github.samgum.aegisub.feature.editor.navigation.editorScreen
+import io.github.samgum.aegisub.feature.editor.navigation.styleEditorScreen
+import io.github.samgum.aegisub.feature.editor.navigation.stylesRoute
 import io.github.samgum.aegisub.feature.preview.navigation.previewRoute
 import io.github.samgum.aegisub.feature.preview.navigation.previewScreen
 import io.github.samgum.aegisub.ui.home.HomeScreen
@@ -45,7 +47,9 @@ fun AppNavigation() {
             editorScreen(
                 onBack = { nav.popBackStack() },
                 onOpenPreview = { id -> nav.navigate(previewRoute(id)) },
+                onOpenStyles = { id -> nav.navigate(stylesRoute(id)) },
             )
+            styleEditorScreen(onBack = { nav.popBackStack() })
             previewScreen(onBack = { nav.popBackStack() })
         }
     }

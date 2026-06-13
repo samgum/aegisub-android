@@ -76,6 +76,7 @@ import io.github.samgum.aegisub.feature.editor.expanded.EditorTwoPane
 fun EditorScreen(
     onBack: () -> Unit,
     onOpenPreview: (Long) -> Unit,
+    onOpenStyles: (Long) -> Unit,
     viewModel: EditorViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -175,6 +176,7 @@ fun EditorScreen(
             onShiftTimes = { showToolbox = false; showShiftTimes = true },
             onDeleteEmpty = { showToolbox = false; showDeleteEmpty = true },
             onStyleReplace = { showToolbox = false; showStyleReplace = true },
+            onOpenStyleManager = { showToolbox = false; onOpenStyles(viewModel.projectId) },
         )
     }
 
@@ -332,6 +334,7 @@ private fun ToolboxSheet(
     onShiftTimes: () -> Unit,
     onDeleteEmpty: () -> Unit,
     onStyleReplace: () -> Unit,
+    onOpenStyleManager: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
@@ -352,6 +355,9 @@ private fun ToolboxSheet(
             }
             item {
                 ToolEntry(Icons.Filled.Edit, "样式批量替换", "把指定样式名的事件改为另一样式") { onStyleReplace() }
+            }
+            item {
+                ToolEntry(Icons.Filled.Build, "样式管理器", "编辑颜色 / 字体 / 描边 / 对齐 / 边距 / 编码") { onOpenStyleManager() }
             }
             item { HorizontalDivider() }
         }

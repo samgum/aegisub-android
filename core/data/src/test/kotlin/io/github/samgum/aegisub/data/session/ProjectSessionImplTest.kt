@@ -2,6 +2,7 @@ package io.github.samgum.aegisub.data.session
 
 import io.github.samgum.aegisub.data.repository.Project
 import io.github.samgum.aegisub.data.repository.ProjectRepository
+import io.github.samgum.aegisub.domain.model.AssStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -154,6 +155,22 @@ class ProjectSessionImplTest {
         s.script.value!!.events.forEach { assertEquals("Title", it.style) }
         s.undo()
         s.script.value!!.events.forEach { assertEquals("Default", it.style) }
+    }
+
+    @Test fun editStyles_updates_and_single_undo() = runTest(dispatcher) {
+        val s = session(FakeRepo(assSample))
+        advanceUntilIdle()
+        assertEquals(1, s.script.value!!.styles.size)
+        assertEquals("Default", s.script.value!!.styles.first().name)
+        // 改样式名 + 加新样式：列表级变换
+        s.editStyles { it.map { st -> if (st.name == "Default") st.copy(name = "Renamed") else st } + AssStyle(name = "Title") }
+        assertEquals(2, s.script.value!!.styles.size)
+        assertEquals("Renamed", s.script.value!!.styles[0].name)
+        assertEquals("Title", s.script.value!!.styles[1].name)
+        assertTrue(s.canUndo.value)
+        s.undo()
+        assertEquals(1, s.script.value!!.styles.size)
+        assertEquals("Default", s.script.value!!.styles.first().name)
     }
 
     private class FakeRepo(
