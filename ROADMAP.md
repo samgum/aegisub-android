@@ -2,7 +2,7 @@
 
 > 滚动更新。每完成一个 Phase 提交 Commit 并更新本文件与 README。
 
-## 当前状态：✅ Phase 0–7 核心闭环全部完成。首选项（主题/导出精度/布局）持久化；编辑器+预览共享 session；打轴（WASD 键盘 + 拖拽手柄 + 逐帧）；音频波形/频谱双视图；样式编辑器（颜色/字体/描边/对齐/边距/编码全字段）；批量工具（查找替换/时间偏移/删除空行/样式批量替换）；历史版本恢复；撤销栈有界内存治理。剩余仅远期预留（Lua/libass JNI/AI）。
+## 当前状态：✅ Phase 0–8 核心闭环 + 桌面端功能复刻完成。Phase 8 复刻桌面 Aegisub 七大功能域：行级操作 / 排序 + 帧率转换 / 脚本属性 / 样式助手 / 翻译助手 / Karaoke 音节 / 可视化打字（{\pos}/{\fr} 拖拽）。功能覆盖比对见 [docs/COMPARISON.md](docs/COMPARISON.md)。下一阶段为第二轮复刻（多选批量、{\move}/{\fad}/{\clip}、Karaoke 交互计时、分辨率重采样、时间后处理等，详见比对文档「缺口」）。
 
 ---
 
@@ -77,3 +77,32 @@
 - [ ] 插件系统
 - [ ] libass JNI 渲染（精确 ASS 渲染）
 - [ ] AI 辅助字幕（听写 / 翻译 / 时间轴对齐）
+
+## Phase 8 · 桌面端功能复刻 ✅（七大功能域）
+**目标**：完整对比桌面 Aegisub，把核心编辑/打轴/样式/翻译/Karaoke/可视化打字能力复刻到 Android。
+
+- [x] 行级操作（`LineOps`）：复制 / 删除 / 前插 / 后插 / 分割（按文本位置）/ 合并（拼接 / 留首）/ 上下移；行操作工具条嵌入编辑底栏与详情面板；新行 id = max+1 保证唯一
+- [x] 排序（`SortLines`）：按起始/结束/样式/演员/效果/文本/层，升降序，稳定排序
+- [x] 帧率转换（`FramerateConverter`）：按 to/from 帧率等比缩放全部时间（含 NTSC 分数帧率预设）
+- [x] 脚本属性（`ScriptInfoOps` + `session.editInfo`）：编辑 Title / PlayResX/Y / WrapStyle / ScaledBorderAndShadow / Collisions / Timer，批量提交单撤销点
+- [x] 样式助手（`StylingAssistantSheet`）：逐行浏览，点选样式色块快速分配并自动前进
+- [x] 翻译助手（`TranslationAssistantSheet`）：原文存 Name、译文存 Text，逐行前进
+- [x] Karaoke 音节生成（`KaraokeGenerator`）：按词/按字切分，时长均匀分配（余数前置），{\k}/{\kf} 标签
+- [x] 可视化打字（`VisualTags` + `VisualTypesettingOverlay`）：视频画面拖拽设 {\pos}（脚本坐标系映射，松手提交），\fr 旋转滑块，清除 \pos
+- [x] 工具箱统一入口：查找替换 / 时间偏移 / 排序 / 帧率转换 / 脚本属性 / 样式助手 / 翻译助手 / 卡拉OK / 删除空行 / 样式批量替换 / 样式管理器 / 历史版本
+
+**验收**：`:core:domain:test` + `:feature:editor:testDebugUnitTest` 全绿；`assembleDebug` 出 APK。TDD 覆盖所有域纯函数。
+
+## Phase 9 · 第二轮复刻（进行中）
+依据 [docs/COMPARISON.md](docs/COMPARISON.md) 的缺口清单逐项补齐：
+
+- [ ] 字幕网格**多选**：批量复制/删除/平移/排序/套样式作用于选中行
+- [ ] `{\move}` 动画（两点拖拽）+ `{\fad}`/`{\fade}` 淡入淡出编辑器
+- [ ] `{\clip}`/`{\iclip}` 矩形与矢量裁剪工具
+- [ ] Karaoke **交互式计时**：拖拽音节边界调整逐音节时长
+- [ ] **分辨率重采样器**（Resolution Resampler）：改 PlayResX/Y 并按比例缩放 {\pos} / 样式字号 / 边距
+- [ ] **时间后处理**：去重叠 / lead-in/out / 关键帧吸附
+- [ ] 粘贴覆盖（Paste Over）+ 导出转换（SRT/VTT）
+- [ ] 关键帧导入与吸附；书签
+- [ ] libass JNI 精确渲染（替换简化 Compose 渲染）
+
