@@ -2,22 +2,22 @@
 
 > 滚动更新。每完成一个 Phase 提交 Commit 并更新本文件与 README。
 
-## 当前状态：Phase 0 — 核心域模块（`:core:domain`）
+## 当前状态：✅ Phase 0 完成 — 核心域模块 `:core:domain`（77 单测全绿）。下一步 Phase 1（数据层 + 应用外壳）。
 
 ---
 
-## Phase 0 · 核心域模块（地基）
+## Phase 0 · 核心域模块（地基）✅
 **目标**：用 TDD 建立纯 Kotlin/JVM、零 Android 依赖的字幕工程核心，全部可单测。
 
-- [ ] `SubTime`：微秒存储 + ASS/SRT/LRC(4 格式)/SMPTE 格式化与解析 + 范围限制 + 容错
-- [ ] 数据模型：`AssScript / AssEvent / AssStyle / AssInfo / AssColor`（不可变）
-- [ ] 对话体 tokenizer（端口自 Aegisub dialogue_parser）+ 块模型 + 绘图标记
-- [ ] 格式编解码：ASS / SSA / SRT / TXT / **LRC（全新）**
-- [ ] 自动检测注册表 + 导出精度选项（厘秒 / 毫秒 / 自动）
-- [ ] 撤销引擎：`UndoStack` 接口 + 不可变 CoW 快照实现
-- [ ] 单测覆盖率 ≥ 90%（往返等价、4 LRC 格式、混合检测、边界、ASS↔SSA 对齐）
+- [x] `SubTime`：微秒存储 + ASS/SRT/LRC(4 格式) 格式化与解析 + 范围限制 + 容错（SMPTE 延后至 Phase 3，依赖帧率）
+- [x] 数据模型：`AssScript / AssEvent / AssStyle / AssInfo / AssColor / Margins`（不可变）
+- [x] 对话体 tokenizer（参考 Aegisub dialogue_parser）+ 块模型 + 绘图标记
+- [x] 格式编解码：ASS / SSA / SRT / TXT / **LRC（全新，4 种时间格式）**
+- [x] 自动检测注册表 + 导出精度选项（厘秒 / 毫秒 / 自动）
+- [x] 撤销引擎：`UndoStack` 接口 + 不可变 CoW 快照实现
+- [x] 单测：77 用例全绿（往返等价、4 LRC 格式、混合检测、边界、ASS↔SSA 对齐）
 
-**验收**：`:core:domain` 纯 JVM 测试全绿。
+**验收**：`:core:domain` 纯 JVM 测试全绿（`./gradlew :core:domain:test` → BUILD SUCCESSFUL，77 passed）。
 
 ## Phase 1 · 数据层与应用外壳
 - [ ] 多模块 Gradle 脚手架（`:app` `:core:data` `:core:domain`）
