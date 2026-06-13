@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
@@ -47,12 +48,17 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.samgum.aegisub.domain.model.AssEvent
+import io.github.samgum.aegisub.domain.time.SubTime
+import io.github.samgum.aegisub.feature.preview.components.NudgeTarget
 import io.github.samgum.aegisub.feature.preview.components.PlayerSurface
 import io.github.samgum.aegisub.feature.preview.components.SubtitleOverlay
+import io.github.samgum.aegisub.feature.preview.components.TimelineBar
+import io.github.samgum.aegisub.feature.preview.components.TimingEditPanel
 
 /**
  * 预览屏入口：加载→分发（Loading/Error/Loaded）→ compact/expanded。
  * SAF 选片在本屏发起，结果回写 ViewModel.attachMedia。
+ * 顶栏撤销、选中行展开时间编辑面板、视频下只读时间轴条。
  *
  * @author 伤感咩吖
  */
@@ -63,6 +69,7 @@ fun PreviewScreen(
     viewModel: PreviewViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val canUndo by viewModel.canUndo.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -82,6 +89,11 @@ fun PreviewScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = viewModel::undo, enabled = canUndo) {
+                        Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "撤销")
                     }
                 },
             )
@@ -150,6 +162,12 @@ private fun VideoBlock(
             onSeek = viewModel::seekTo,
             onSpeedChange = viewModel::setSpeed,
         )
+        TimelineBar(
+            events = state.script.events,
+            selectedEventId = state.selectedEventId,
+            positionMs = state.playback.positionMs,
+            durationMs = state.playback.durationMs,
+        )
     }
 }
 
@@ -214,10 +232,14 @@ private fun CompactPreview(
 ) {
     Column(Modifier.fillMaxSize()) {
         VideoBlock(state = state, viewModel = viewModel, onPickVideo = onPickVideo)
+        if (state.selectedEventId != null) {
+            TimingEditLayer(state = state, viewModel = viewModel)
+        }
         EventListColumn(
             events = state.script.events,
             currentEventId = state.currentEventId,
-            onEventClick = viewModel::seekToEvent,
+            selectedEventId = state.selectedEventId,
+            onSelect = viewModel::selectEvent,
             modifier = Modifier.fillMaxSize(),
         )
     }
@@ -236,12 +258,18 @@ private fun ExpandedPreview(
             onPickVideo = onPickVideo,
             modifier = Modifier.weight(0.6f),
         )
-        EventListColumn(
-            events = state.script.events,
-            currentEventId = state.currentEventId,
-            onEventClick = viewModel::seekToEvent,
-            modifier = Modifier.weight(0.4f),
-        )
+        Column(modifier = Modifier.weight(0.4f)) {
+            if (state.selectedEventId != null) {
+                TimingEditLayer(state = state, viewModel = viewModel)
+            }
+            EventListColumn(
+                events = state.script.events,
+                currentEventId = state.currentEventId,
+                selectedEventId = state.selectedEventId,
+                onSelect = viewModel::selectEvent,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 
@@ -249,7 +277,8 @@ private fun ExpandedPreview(
 private fun EventListColumn(
     events: List<AssEvent>,
     currentEventId: Long?,
-    onEventClick: (Long) -> Unit,
+    selectedEventId: Long?,
+    onSelect: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier = modifier) {
@@ -257,14 +286,20 @@ private fun EventListColumn(
             PreviewEventRow(
                 event = event,
                 isCurrent = event.id == currentEventId,
-                onClick = { onEventClick(event.id) },
+                isSelected = event.id == selectedEventId,
+                onClick = { onSelect(event.id) },
             )
         }
     }
 }
 
 @Composable
-private fun PreviewEventRow(event: AssEvent, isCurrent: Boolean, onClick: () -> Unit) {
+private fun PreviewEventRow(event: AssEvent, isCurrent: Boolean, isSelected: Boolean, onClick: () -> Unit) {
+    val bg = when {
+        isSelected -> MaterialTheme.colorScheme.primaryContainer
+        isCurrent -> MaterialTheme.colorScheme.secondaryContainer
+        else -> Color.Transparent
+    }
     ListItem(
         headlineContent = {
             Text(
@@ -283,9 +318,33 @@ private fun PreviewEventRow(event: AssEvent, isCurrent: Boolean, onClick: () -> 
                 style = MaterialTheme.typography.bodySmall,
             )
         },
-        modifier = Modifier
-            .background(if (isCurrent) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-            .clickable(onClick = onClick),
+        modifier = Modifier.background(bg).clickable(onClick = onClick),
+    )
+}
+
+/**
+ * 选中行的时间编辑承载：本地持有微调目标（起/止），把面板事件接到 ViewModel。
+ * 选中行切换时重置微调目标为「起」。
+ */
+@Composable
+private fun TimingEditLayer(state: PreviewUiState.Loaded, viewModel: PreviewViewModel) {
+    val event = state.script.events.firstOrNull { it.id == state.selectedEventId } ?: return
+    var target by remember(state.selectedEventId) { mutableStateOf(NudgeTarget.START) }
+    TimingEditPanel(
+        startMs = event.start.millis,
+        endMs = event.end.millis,
+        durationMs = state.playback.durationMs,
+        nudgeTarget = target,
+        onNudgeTargetChange = { target = it },
+        onSeek = viewModel::seekTo,
+        onCommitStart = { ms -> viewModel.editEventTimes(event.id, SubTime.ofMillis(ms), event.end) },
+        onCommitEnd = { ms -> viewModel.editEventTimes(event.id, event.start, SubTime.ofMillis(ms)) },
+        onNudge = { delta ->
+            when (target) {
+                NudgeTarget.START -> viewModel.nudgeStart(delta)
+                NudgeTarget.END -> viewModel.nudgeEnd(delta)
+            }
+        },
     )
 }
 
