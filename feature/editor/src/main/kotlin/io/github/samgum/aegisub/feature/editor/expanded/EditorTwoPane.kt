@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,6 +39,7 @@ fun EditorTwoPane(
     editingId: Long?,
     onEventClick: (AssEvent) -> Unit,
     onBack: () -> Unit,
+    onOpenPreview: () -> Unit,
     canUndo: Boolean,
     canRedo: Boolean,
     onUndo: () -> Unit,
@@ -57,6 +59,9 @@ fun EditorTwoPane(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onOpenPreview) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = "预览")
+                    }
                     EditorActions(canUndo, canRedo, onUndo, onRedo)
                 },
             )

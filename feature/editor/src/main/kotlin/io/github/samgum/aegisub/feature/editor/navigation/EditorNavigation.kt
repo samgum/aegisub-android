@@ -14,11 +14,11 @@ private const val EDITOR_ROUTE = "$EDITOR_ROUTE_BASE/{projectId}"
 fun editorRoute(projectId: Long): String = "$EDITOR_ROUTE_BASE/$projectId"
 
 /** 注册编辑器目的地。 */
-fun NavGraphBuilder.editorScreen(onBack: () -> Unit) {
+fun NavGraphBuilder.editorScreen(onBack: () -> Unit, onOpenPreview: (Long) -> Unit) {
     composable(
         route = EDITOR_ROUTE,
         arguments = listOf(navArgument("projectId") { type = NavType.StringType }),
     ) {
-        EditorScreen(onBack = onBack)
+        EditorScreen(onBack = onBack, onOpenPreview = onOpenPreview)
     }
 }

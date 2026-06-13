@@ -4,8 +4,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,6 +41,7 @@ import io.github.samgum.aegisub.feature.editor.expanded.EditorTwoPane
 @Composable
 fun EditorScreen(
     onBack: () -> Unit,
+    onOpenPreview: (Long) -> Unit,
     viewModel: EditorViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -75,6 +80,7 @@ fun EditorScreen(
                     onEventClick = { editingId = it.id },
                     onDismissEdit = { editingId = null },
                     onBack = onBack,
+                    onOpenPreview = { onOpenPreview(viewModel.projectId) },
                     canUndo = canUndo,
                     canRedo = canRedo,
                     viewModel = viewModel,
@@ -85,6 +91,7 @@ fun EditorScreen(
                     editingId = editingId,
                     onEventClick = { editingId = it.id },
                     onBack = onBack,
+                    onOpenPreview = { onOpenPreview(viewModel.projectId) },
                     canUndo = canUndo,
                     canRedo = canRedo,
                     onUndo = viewModel::undo,
@@ -106,6 +113,7 @@ private fun CompactEditor(
     onEventClick: (AssEvent) -> Unit,
     onDismissEdit: () -> Unit,
     onBack: () -> Unit,
+    onOpenPreview: () -> Unit,
     canUndo: Boolean,
     canRedo: Boolean,
     viewModel: EditorViewModel,
@@ -115,6 +123,9 @@ private fun CompactEditor(
         onEventClick = onEventClick,
         onBack = onBack,
         actions = {
+            IconButton(onClick = onOpenPreview) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = "预览")
+            }
             EditorActions(
                 canUndo = canUndo,
                 canRedo = canRedo,
