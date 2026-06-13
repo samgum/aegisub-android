@@ -5,6 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,7 +16,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -31,6 +35,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -192,17 +197,25 @@ fun PreviewScreen(
     }
 }
 
+/** 预览下半区分段：字幕列表 / 音频波形 / 时间打轴 / 可视化打字。 */
+enum class PreviewPanel { SUBTITLES, AUDIO, TIMING, TYPES }
+
+/**
+ * 精简视频块：仅视频画面（+字幕叠加 + 可视化打字拖拽层）+ 播放控制。
+ * 波形/时间面板/打字控件移入分段面板，避免在竖屏挤占字幕列表空间。
+ *
+ * @author 伤感咩吖
+ */
 @Composable
 private fun VideoBlock(
     state: PreviewUiState.Loaded,
     viewModel: PreviewViewModel,
     onPickVideo: () -> Unit,
+    vtActive: Boolean,
+    vtToolMode: VisualToolMode,
+    onVtToolModeChange: (VisualToolMode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var showSpectrogram by remember { mutableStateOf(false) }
-    var vtMode by remember { mutableStateOf(false) }
-    var vtToolMode by remember { mutableStateOf(VisualToolMode.POSITION) }
-    var karaokeMode by remember { mutableStateOf(false) }
     val selectedEvent = state.script.events.firstOrNull { it.id == state.selectedEventId }
     val playResX = state.script.getScriptInfo("PlayResX")?.toIntOrNull() ?: 384
     val playResY = state.script.getScriptInfo("PlayResY")?.toIntOrNull() ?: 288
@@ -217,7 +230,7 @@ private fun VideoBlock(
             PlayerSurface(player = viewModel.videoPlayer, modifier = Modifier.fillMaxSize())
             ActiveSubtitleLayer(viewModel = viewModel)
             // 可视化打字：选中行 + 挂载视频时，在画面上拖拽设 {\pos}/{\move}
-            if (vtMode && state.hasMedia && selectedEvent != null) {
+            if (vtActive && state.hasMedia && selectedEvent != null) {
                 VisualTypesettingOverlay(
                     playResX = playResX,
                     playResY = playResY,
@@ -236,8 +249,7 @@ private fun VideoBlock(
                     Button(onClick = onPickVideo) { Text("选择视频") }
                 }
             }
-            // 可视化打字模式徽标
-            if (vtMode) {
+            if (vtActive) {
                 Text(
                     if (vtToolMode == VisualToolMode.POSITION) "可视化打字：拖拽设 \\pos"
                     else "可视化打字：拖拽起点(绿)/终点(橙)设 \\move",
@@ -255,70 +267,123 @@ private fun VideoBlock(
             onFrameBack = viewModel::frameStepBack,
             onFrameForward = viewModel::frameStepForward,
         )
-        // 可视化打字控件：模式切换 + 旋转 {\fr} 滑块 + 淡入淡出 {\fad} + 清除
-        if (vtMode && selectedEvent != null) {
-            VisualTypesettingControls(
-                event = selectedEvent,
-                toolMode = vtToolMode,
-                onToolModeChange = { vtToolMode = it },
-                onRotationChange = { deg -> viewModel.setEventRotation(selectedEvent.id, deg) },
-                onFadeChange = { fin, fout -> viewModel.setEventFade(selectedEvent.id, fin, fout) },
-                onClearPos = { viewModel.clearEventPos(selectedEvent.id) },
-                onClearMove = { viewModel.clearEventMove(selectedEvent.id) },
-            )
-        }
-        // Karaoke 音节计时：拖拽音节边界逐音节调 {\k} 时长
-        if (karaokeMode && selectedEvent != null) {
-            Text(
-                "Karaoke 计时：拖拽音节分隔条在相邻音节间挪动时长",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-            )
-            KaraokeTimeline(
-                text = selectedEvent.text,
-                onCommit = { viewModel.setEventText(selectedEvent.id, it) },
-                modifier = Modifier.padding(horizontal = 8.dp),
-            )
-        }
-        // 音频可视化切换：波形 / 频谱 + 可视化打字开关
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(onClick = { showSpectrogram = !showSpectrogram }) {
-                Text(if (showSpectrogram) "切到波形" else "切到频谱")
-            }
-            TextButton(onClick = { vtMode = !vtMode }) {
-                Text(if (vtMode) "退出可视化打字" else "可视化打字")
-            }
-            TextButton(onClick = { karaokeMode = !karaokeMode }) {
-                Text(if (karaokeMode) "退出Karaoke计时" else "Karaoke计时")
-            }
-        }
-        val waveform by viewModel.waveform.collectAsStateWithLifecycle()
-        val spectrogram by viewModel.spectrogram.collectAsStateWithLifecycle()
-        if (showSpectrogram) {
-            SpectrogramView(
-                data = spectrogram,
-                positionMs = state.playback.positionMs,
-                durationMs = state.playback.durationMs,
-            )
-        } else {
-            AudioTimeline(
-                waveform = waveform,
-                events = state.script.events,
-                selectedEventId = state.selectedEventId,
-                positionMs = state.playback.positionMs,
-                durationMs = state.playback.durationMs,
-                onCommitDrag = { id, startMs, endMs ->
-                    viewModel.editEventTimes(id, SubTime.ofMillis(startMs), SubTime.ofMillis(endMs))
-                    viewModel.selectEvent(id)
-                },
-            )
+    }
+}
+
+/**
+ * 下半区分段条（字幕 / 音频 / 时间 / 打字）。
+ */
+@Composable
+private fun PreviewTabs(
+    panel: PreviewPanel,
+    onPanelChange: (PreviewPanel) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tabs = listOf(
+        PreviewPanel.SUBTITLES to "字幕",
+        PreviewPanel.AUDIO to "音频",
+        PreviewPanel.TIMING to "时间",
+        PreviewPanel.TYPES to "打字",
+    )
+    Row(
+        modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        tabs.forEach { (p, label) ->
+            FilterChip(selected = panel == p, onClick = { onPanelChange(p) }, label = { Text(label) })
         }
     }
 }
+
+/**
+ * 下半区内容：按分段渲染，占满剩余空间（字幕列表因此总是可达且宽敞）。
+ */
+@Composable
+private fun PreviewPanelContent(
+    panel: PreviewPanel,
+    state: PreviewUiState.Loaded,
+    viewModel: PreviewViewModel,
+    showSpectrogram: Boolean,
+    onShowSpectrogramChange: (Boolean) -> Unit,
+    vtToolMode: VisualToolMode,
+    onVtToolModeChange: (VisualToolMode) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val selectedEvent = state.script.events.firstOrNull { it.id == state.selectedEventId }
+    val waveform by viewModel.waveform.collectAsStateWithLifecycle()
+    val spectrogram by viewModel.spectrogram.collectAsStateWithLifecycle()
+    when (panel) {
+        PreviewPanel.SUBTITLES -> EventListColumn(
+            events = state.script.events,
+            currentEventId = state.currentEventId,
+            selectedEventId = state.selectedEventId,
+            onSelect = viewModel::selectEvent,
+            modifier = modifier,
+        )
+
+        PreviewPanel.AUDIO -> Column(modifier) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { onShowSpectrogramChange(false) }) { Text("波形") }
+                TextButton(onClick = { onShowSpectrogramChange(true) }) { Text("频谱") }
+            }
+            if (showSpectrogram) {
+                SpectrogramView(
+                    data = spectrogram,
+                    positionMs = state.playback.positionMs,
+                    durationMs = state.playback.durationMs,
+                )
+            } else {
+                AudioTimeline(
+                    waveform = waveform,
+                    events = state.script.events,
+                    selectedEventId = state.selectedEventId,
+                    positionMs = state.playback.positionMs,
+                    durationMs = state.playback.durationMs,
+                    onCommitDrag = { id, startMs, endMs ->
+                        viewModel.editEventTimes(id, SubTime.ofMillis(startMs), SubTime.ofMillis(endMs))
+                        viewModel.selectEvent(id)
+                    },
+                )
+            }
+        }
+
+        PreviewPanel.TIMING -> Column(modifier.verticalScroll(rememberScrollState())) {
+            if (selectedEvent != null) {
+                TimingToolbar(state = state, viewModel = viewModel)
+                TimingEditLayer(state = state, viewModel = viewModel)
+            } else {
+                Text("选择左侧字幕行进行打轴", modifier = Modifier.padding(16.dp))
+            }
+        }
+
+        PreviewPanel.TYPES -> Column(modifier.verticalScroll(rememberScrollState()).padding(8.dp)) {
+            if (selectedEvent != null && state.hasMedia) {
+                Text("可视化打字", style = MaterialTheme.typography.titleSmall)
+                VisualTypesettingControls(
+                    event = selectedEvent,
+                    toolMode = vtToolMode,
+                    onToolModeChange = onVtToolModeChange,
+                    onRotationChange = { deg -> viewModel.setEventRotation(selectedEvent.id, deg) },
+                    onFadeChange = { fin, fout -> viewModel.setEventFade(selectedEvent.id, fin, fout) },
+                    onClearPos = { viewModel.clearEventPos(selectedEvent.id) },
+                    onClearMove = { viewModel.clearEventMove(selectedEvent.id) },
+                )
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                Text("Karaoke 计时", style = MaterialTheme.typography.titleSmall)
+                KaraokeTimeline(
+                    text = selectedEvent.text,
+                    onCommit = { viewModel.setEventText(selectedEvent.id, it) },
+                )
+            } else {
+                Text("选择字幕行并挂载视频后使用可视化打字。", modifier = Modifier.padding(16.dp))
+            }
+        }
+    }
+}
+
 
 /**
  * 可视化打字控件：模式切换（定位/移动）+ 旋转 {\fr} 滑块 + 淡入淡出 {\fad} + 清除。
@@ -472,18 +537,28 @@ private fun CompactPreview(
     viewModel: PreviewViewModel,
     onPickVideo: () -> Unit,
 ) {
+    var panel by remember { mutableStateOf(PreviewPanel.SUBTITLES) }
+    var vtToolMode by remember { mutableStateOf(VisualToolMode.POSITION) }
+    var showSpectrogram by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
-        VideoBlock(state = state, viewModel = viewModel, onPickVideo = onPickVideo)
-        if (state.selectedEventId != null) {
-            TimingToolbar(state = state, viewModel = viewModel)
-            TimingEditLayer(state = state, viewModel = viewModel)
-        }
-        EventListColumn(
-            events = state.script.events,
-            currentEventId = state.currentEventId,
-            selectedEventId = state.selectedEventId,
-            onSelect = viewModel::selectEvent,
-            modifier = Modifier.fillMaxSize(),
+        VideoBlock(
+            state = state,
+            viewModel = viewModel,
+            onPickVideo = onPickVideo,
+            vtActive = panel == PreviewPanel.TYPES && state.hasMedia,
+            vtToolMode = vtToolMode,
+            onVtToolModeChange = { vtToolMode = it },
+        )
+        PreviewTabs(panel = panel, onPanelChange = { panel = it })
+        PreviewPanelContent(
+            panel = panel,
+            state = state,
+            viewModel = viewModel,
+            showSpectrogram = showSpectrogram,
+            onShowSpectrogramChange = { showSpectrogram = it },
+            vtToolMode = vtToolMode,
+            onVtToolModeChange = { vtToolMode = it },
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -494,22 +569,29 @@ private fun ExpandedPreview(
     viewModel: PreviewViewModel,
     onPickVideo: () -> Unit,
 ) {
+    var panel by remember { mutableStateOf(PreviewPanel.SUBTITLES) }
+    var vtToolMode by remember { mutableStateOf(VisualToolMode.POSITION) }
+    var showSpectrogram by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxSize()) {
         VideoBlock(
             state = state,
             viewModel = viewModel,
             onPickVideo = onPickVideo,
-            modifier = Modifier.weight(0.6f),
+            vtActive = panel == PreviewPanel.TYPES && state.hasMedia,
+            vtToolMode = vtToolMode,
+            onVtToolModeChange = { vtToolMode = it },
+            modifier = Modifier.weight(0.55f),
         )
-        Column(modifier = Modifier.weight(0.4f)) {
-            if (state.selectedEventId != null) {
-                TimingEditLayer(state = state, viewModel = viewModel)
-            }
-            EventListColumn(
-                events = state.script.events,
-                currentEventId = state.currentEventId,
-                selectedEventId = state.selectedEventId,
-                onSelect = viewModel::selectEvent,
+        Column(modifier = Modifier.weight(0.45f)) {
+            PreviewTabs(panel = panel, onPanelChange = { panel = it })
+            PreviewPanelContent(
+                panel = panel,
+                state = state,
+                viewModel = viewModel,
+                showSpectrogram = showSpectrogram,
+                onShowSpectrogramChange = { showSpectrogram = it },
+                vtToolMode = vtToolMode,
+                onVtToolModeChange = { vtToolMode = it },
                 modifier = Modifier.fillMaxSize(),
             )
         }

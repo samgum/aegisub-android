@@ -155,4 +155,37 @@ class VisualTagsTest {
         assertEquals(VisualTags.MoveParams(1, 2, 3, 4), VisualTags.getMove(t))
         assertEquals(VisualTags.FadeParams(100, 200), VisualTags.getFade(t))
     }
+
+    // ---------------- \clip / \iclip ----------------
+
+    @Test fun setClip_inserts_rectangle() {
+        assertEquals("{\\clip(0,0,100,100)}Hi", VisualTags.setClip("Hi", 0, 0, 100, 100))
+    }
+
+    @Test fun setClip_iclip_uses_iclip_tag() {
+        assertEquals("{\\iclip(1,2,3,4)}Hi", VisualTags.setClip("Hi", 1, 2, 3, 4, inverse = true))
+    }
+
+    @Test fun setClip_replaces_existing_rectangle() {
+        assertEquals("{\\clip(9,8,7,6)}Hi", VisualTags.setClip("{\\clip(1,2,3,4)}Hi", 9, 8, 7, 6))
+    }
+
+    @Test fun getClip_parses_rectangle() {
+        assertEquals(VisualTags.ClipRect(0, 0, 100, 100), VisualTags.getClip("{\\clip(0,0,100,100)}Hi"))
+        assertEquals(VisualTags.ClipRect(1, 2, 3, 4, inverse = true), VisualTags.getClip("{\\iclip(1,2,3,4)}Hi"))
+    }
+
+    @Test fun getClip_returns_null_for_vector_or_absent() {
+        assertNull(VisualTags.getClip("Hi"))
+        assertNull(VisualTags.getClip("{\\clip(m 0 0 l 10 10)}Hi"))
+    }
+
+    @Test fun removeClip_drops_only_rectangle_clip() {
+        assertEquals("{\\b1}Hi", VisualTags.removeClip("{\\clip(1,2,3,4)\\b1}Hi"))
+    }
+
+    @Test fun setClip_round_trips() {
+        val t = VisualTags.setClip("Hi", 5, 6, 7, 8)
+        assertEquals(VisualTags.ClipRect(5, 6, 7, 8), VisualTags.getClip(t))
+    }
 }

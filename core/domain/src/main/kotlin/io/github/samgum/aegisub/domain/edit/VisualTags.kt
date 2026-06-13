@@ -22,6 +22,8 @@ object VisualTags {
     // 匹配 \move(...) 与 \fad(...)（无嵌套括号）
     private val MOVE_ARG_RE = Regex("""\\move\([^)]*\)""")
     private val FAD_ARG_RE = Regex("""\\fad\([^)]*\)""")
+    // 匹配 \clip / \iclip 的矩形形式（恰好 4 个数字，逗号分隔）。矢量 m.. 形式不匹配。
+    private val CLIP_RECT_RE = Regex("""\\i?clip\(\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\)""")
     private val NUM_RE = Regex("-?\\d+(?:\\.\\d+)?")
 
     // ---------------- \pos ----------------
@@ -114,6 +116,30 @@ object VisualTags {
 
     /** {\fad} 参数（毫秒）。 */
     data class FadeParams(val fadeIn: Int, val fadeOut: Int)
+
+    /** {\clip}/{\iclip} 矩形参数。[inverse]=true 表示 {\iclip}（反向裁剪）。 */
+    data class ClipRect(val x1: Int, val y1: Int, val x2: Int, val y2: Int, val inverse: Boolean = false)
+
+    // ---------------- \clip / \iclip（矩形）----------------
+
+    /** 解析矩形 {\clip}/{\iclip}；矢量形式或不存在返回 null。 */
+    fun getClip(text: String): ClipRect? {
+        val match = CLIP_RECT_RE.find(text) ?: return null
+        val nums = NUM_RE.findAll(match.value).map { it.value.toInt() }.toList()
+        if (nums.size < 4) return null
+        val inverse = match.value.startsWith("\\iclip")
+        return ClipRect(nums[0], nums[1], nums[2], nums[3], inverse)
+    }
+
+    /** 设置矩形 {\clip}/{\iclip}（已存在矩形则替换；矢量形式不动，会追加）。 */
+    fun setClip(text: String, x1: Int, y1: Int, x2: Int, y2: Int, inverse: Boolean = false): String {
+        val tag = "\\${if (inverse) "iclip" else "clip"}($x1,$y1,$x2,$y2)"
+        return if (CLIP_RECT_RE.containsMatchIn(text)) text.replace(CLIP_RECT_RE) { tag }
+        else insertTag(text, tag)
+    }
+
+    /** 移除所有矩形 {\clip}/{\iclip}。 */
+    fun removeClip(text: String): String = text.replace(CLIP_RECT_RE) { "" }
 
     // ---------------- 工具 ----------------
 

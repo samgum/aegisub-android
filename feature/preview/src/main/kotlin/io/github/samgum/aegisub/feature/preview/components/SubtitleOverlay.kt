@@ -7,22 +7,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.sp
 import io.github.samgum.aegisub.domain.preview.SubtitleRenderInfo
 
 /**
- * 视频画面字幕叠加（简化渲染）。
- * 当前时间无活动事件时透明；有则按样式（字体/字号/主色/粗斜体/真描边/对齐/边距）自绘。
- * PlayRes→视频分辨率缩放留 Phase 5，本阶段边距直接按 dp 计。
+ * 视频画面字幕叠加（自绘渲染）。
+ *
+ * 关键：ASS 的字号/边距/描边都是**脚本分辨率（PlayResX/Y）单位**，必须先按
+ * `canvasHeight / playResY` 缩放到屏幕像素，否则 48pt 会渲染成巨大的 48sp。
+ * 本组件统一在像素层换算：字号 px = style.fontSize × scaleY 经 Density.toSp() 转 sp；
+ * 边距/描边/阴影 px = 对应字段 × 缩放比；{\pos(x,y)} 锚点（脚本坐标）→ 屏幕坐标居中文本块；
+ * 长文本按可用宽度（画布宽 − 左右边距）换行。无活动事件或空文本时透明占位。
  *
  * @author 伤感咩吖
  */
@@ -32,76 +37,102 @@ fun SubtitleOverlay(
     modifier: Modifier = Modifier,
 ) {
     if (renderInfo == null || renderInfo.text.isBlank()) {
-        // 无活动事件：透明占位（保留尺寸以覆盖视频区）
         Box(modifier.fillMaxSize())
         return
     }
     val info = renderInfo
-    val measurer = rememberTextMeasurer()
     val style = info.style
-    val baseTextStyle = TextStyle(
-        color = style.primary.toColor(),
-        fontSize = style.fontSize.toFloat().sp,
-        fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Normal,
-        fontStyle = if (style.italic) FontStyle.Italic else FontStyle.Normal,
-    )
-    // 仅在文本/样式变化时重测，避免每个位置 tick 重测
-    val layout = remember(info.text, baseTextStyle) {
-        measurer.measure(info.text, baseTextStyle)
-    }
+    val measurer = rememberTextMeasurer()
+    // remember 仅缓存 measurer；测量必须在 Canvas 里按画布尺寸做（换行依赖可用宽度）
+    remember(info) { /* 触发 info 变化时重组 */ }
 
     Canvas(modifier = modifier.fillMaxSize()) {
-        val outlineWidthPx = style.outlineWidth.dp.toPx().coerceAtLeast(1f)
+        val scaleY = (size.height / info.playResY.coerceAtLeast(1)).toFloat()
+        val scaleX = (size.width / info.playResX.coerceAtLeast(1)).toFloat()
+        val fontPx = (style.fontSize * scaleY).toFloat().coerceAtLeast(1f)
+        val outlinePx = (style.outlineWidth * scaleY).toFloat().coerceAtLeast(0f)
+        val shadowPx = (style.shadowWidth * scaleY).toFloat().coerceAtLeast(0f)
+        val marginLeftPx = info.margins.left * scaleX
+        val marginRightPx = info.margins.right * scaleX
+        val marginTopPx = info.margins.vertical * scaleY
+        val baseStyle = TextStyle(
+            color = style.primary.toColor(),
+            fontSize = (fontPx / (density * fontScale)).sp,
+            fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Normal,
+            fontStyle = if (style.italic) FontStyle.Italic else FontStyle.Normal,
+        )
+        val maxWidthPx = (size.width - marginLeftPx - marginRightPx).coerceAtLeast(1f).toInt()
+        val layout = measurer.measure(
+            text = info.text,
+            style = baseStyle,
+            constraints = Constraints(maxWidth = maxWidthPx),
+            overflow = TextOverflow.Visible,
+        )
         val topLeft = computeTopLeft(
             alignment = style.alignment,
+            pos = info.pos,
+            scaleX = scaleX,
+            scaleY = scaleY,
             layoutWidth = layout.size.width.toFloat(),
             layoutHeight = layout.size.height.toFloat(),
             canvasWidth = size.width,
             canvasHeight = size.height,
-            marginLeft = info.margins.left.dp.toPx(),
-            marginRight = info.margins.right.dp.toPx(),
-            marginVertical = info.margins.vertical.dp.toPx(),
+            marginLeftPx = marginLeftPx,
+            marginRightPx = marginRightPx,
+            marginVerticalPx = marginTopPx,
         )
-        // 1) 描边层（Stroke）：先画，宽于填充
-        drawText(
-            textMeasurer = measurer,
-            text = info.text,
-            topLeft = topLeft,
-            style = baseTextStyle.copy(color = style.outline.toColor(), drawStyle = Stroke(width = outlineWidthPx)),
-        )
-        // 2) 填充层（Fill）：覆盖描边中心
-        drawText(
-            textMeasurer = measurer,
-            text = info.text,
-            topLeft = topLeft,
-            style = baseTextStyle.copy(drawStyle = Fill),
-        )
+        // 阴影层
+        if (shadowPx > 0f) {
+            drawText(
+                textLayoutResult = layout,
+                topLeft = Offset(topLeft.x + shadowPx, topLeft.y + shadowPx),
+            )
+        }
+        // 描边层
+        if (outlinePx > 0f) {
+            drawText(
+                textLayoutResult = layout,
+                topLeft = topLeft,
+                color = style.outline.toColor(),
+                drawStyle = Stroke(width = outlinePx * 2f),
+            )
+        }
+        // 填充层
+        drawText(textLayoutResult = layout, topLeft = topLeft)
     }
 }
 
 /**
- * 按 \an 1-9 对齐 + 边距计算文本左上角。numpad：1/4/7 左、2/5/8 中、3/6/9 右；
- * 7/8/9 上、4/5/6 中、1/2/3 下。
+ * 计算文本块左上角（屏幕像素）。有 {\pos} 时锚点居中文本块；否则按 \an 对齐 + 边距。
+ * numpad：1/4/7 左、2/5/8 中、3/6/9 右；7/8/9 上、4/5/6 中、1/2/3 下。
  */
 private fun DrawScope.computeTopLeft(
     alignment: Int,
+    pos: Pair<Int, Int>?,
+    scaleX: Float,
+    scaleY: Float,
     layoutWidth: Float,
     layoutHeight: Float,
     canvasWidth: Float,
     canvasHeight: Float,
-    marginLeft: Float,
-    marginRight: Float,
-    marginVertical: Float,
+    marginLeftPx: Float,
+    marginRightPx: Float,
+    marginVerticalPx: Float,
 ): Offset {
+    if (pos != null) {
+        val ax = pos.first * scaleX
+        val ay = pos.second * scaleY
+        return Offset(ax - layoutWidth / 2f, ay - layoutHeight / 2f)
+    }
     val x = when (alignment) {
-        1, 4, 7 -> marginLeft
-        3, 6, 9 -> canvasWidth - layoutWidth - marginRight
+        1, 4, 7 -> marginLeftPx
+        3, 6, 9 -> canvasWidth - layoutWidth - marginRightPx
         else -> (canvasWidth - layoutWidth) / 2f
     }
     val y = when (alignment) {
-        7, 8, 9 -> marginVertical
+        7, 8, 9 -> marginVerticalPx
         4, 5, 6 -> (canvasHeight - layoutHeight) / 2f
-        else -> canvasHeight - layoutHeight - marginVertical
+        else -> canvasHeight - layoutHeight - marginVerticalPx
     }
     return Offset(x, y)
 }
