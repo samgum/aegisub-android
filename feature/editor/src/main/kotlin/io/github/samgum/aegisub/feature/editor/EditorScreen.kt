@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -137,6 +138,7 @@ fun EditorScreen(
     var showTranslation by remember { mutableStateOf(false) }
     var showKaraoke by remember { mutableStateOf(false) }
     var showTimingPP by remember { mutableStateOf(false) }
+    var showResample by remember { mutableStateOf(false) }
 
     when (val s = state) {
         EditorUiState.Loading ->
@@ -250,6 +252,7 @@ fun EditorScreen(
             onTranslation = { showToolbox = false; showTranslation = true },
             onKaraoke = { showToolbox = false; showKaraoke = true },
             onTimingPP = { showToolbox = false; showTimingPP = true },
+            onResample = { showToolbox = false; showResample = true },
             onDeleteEmpty = { showToolbox = false; showDeleteEmpty = true },
             onStyleReplace = { showToolbox = false; showStyleReplace = true },
             onOpenStyleManager = { showToolbox = false; onOpenStyles(viewModel.projectId) },
@@ -410,6 +413,19 @@ fun EditorScreen(
         )
     }
 
+    if (showResample) {
+        val (fromW, fromH) = viewModel.playRes()
+        ResolutionResampleDialog(
+            fromW = fromW,
+            fromH = fromH,
+            onDismiss = { showResample = false },
+            onApply = { toW, toH, scalePos, scaleBorders ->
+                viewModel.resampleResolution(fromW, fromH, toW, toH, scalePos, scaleBorders)
+                showResample = false
+            },
+        )
+    }
+
     if (showHistory) {
         HistorySheet(
             snapshots = snapshots,
@@ -545,6 +561,7 @@ private fun ToolboxSheet(
     onTranslation: () -> Unit,
     onKaraoke: () -> Unit,
     onTimingPP: () -> Unit,
+    onResample: () -> Unit,
     onDeleteEmpty: () -> Unit,
     onStyleReplace: () -> Unit,
     onOpenStyleManager: () -> Unit,
@@ -593,6 +610,9 @@ private fun ToolboxSheet(
             }
             item {
                 ToolEntry(Icons.Filled.Timer, "时间后处理", "lead-in/out 提前起始延后结束 + 去重叠强制最小间隙") { onTimingPP() }
+            }
+            item {
+                ToolEntry(Icons.Filled.AspectRatio, "分辨率重采样", "改 PlayRes 并按比例缩放 \\pos/字号/边距（如 384×288→1920×1080）") { onResample() }
             }
             item {
                 ToolEntry(Icons.Filled.PlayArrow, "历史版本", "保存当前为快照 / 恢复到过往版本（可撤销）") { onOpenHistory() }
@@ -948,6 +968,85 @@ private fun PropertiesSheet(
             }
         }
     }
+}
+
+/**
+ * 分辨率重采样对话框：源分辨率预填当前 PlayResX/Y，输入目标分辨率 + 缩放选项。
+ *
+ * @author 伤感咩吖
+ */
+@Composable
+private fun ResolutionResampleDialog(
+    fromW: Int,
+    fromH: Int,
+    onDismiss: () -> Unit,
+    onApply: (toW: Int, toH: Int, scalePositions: Boolean, scaleBorders: Boolean) -> Unit,
+) {
+    val presets = listOf(
+        "384×288" to (384 to 288),
+        "640×480" to (640 to 480),
+        "1280×720" to (1280 to 720),
+        "1920×1080" to (1920 to 1080),
+        "3840×2160" to (3840 to 2160),
+    )
+    var toW by remember { mutableStateOf((fromW * 2).toString()) }
+    var toH by remember { mutableStateOf((fromH * 2).toString()) }
+    var scalePos by remember { mutableStateOf(true) }
+    var scaleBorders by remember { mutableStateOf(true) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("分辨率重采样") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("源分辨率：$fromW × $fromH", style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = toW,
+                        onValueChange = { toW = it.filter { ch -> ch.isDigit() } },
+                        label = { Text("目标宽") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = toH,
+                        onValueChange = { toH = it.filter { ch -> ch.isDigit() } },
+                        label = { Text("目标高") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    presets.forEach { (label, res) ->
+                        FilterChip(
+                            selected = toW == res.first.toString() && toH == res.second.toString(),
+                            onClick = { toW = res.first.toString(); toH = res.second.toString() },
+                            label = { Text(label) },
+                        )
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = scalePos, onCheckedChange = { scalePos = it })
+                    Text("缩放 \\pos/\\move")
+                    Checkbox(checked = scaleBorders, onCheckedChange = { scaleBorders = it })
+                    Text("缩放描边/阴影")
+                }
+                Text("字号与边距始终按比例缩放；PlayResX/Y 更新为目标值。可撤销。", style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = {
+            val w = toW.toIntOrNull() ?: 0
+            val h = toH.toIntOrNull() ?: 0
+            TextButton(onClick = { onApply(w, h, scalePos, scaleBorders) }, enabled = w > 0 && h > 0) {
+                Text("应用")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }
 
 /**

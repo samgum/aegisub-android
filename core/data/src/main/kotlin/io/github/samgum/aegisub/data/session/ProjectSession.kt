@@ -42,6 +42,9 @@ interface ProjectSession {
     /** 对整个 [Script Info] 键值列表应用任意变换（增删改），一次提交（一个撤销点，用于脚本属性编辑）。 */
     fun editInfo(transform: (List<AssInfo>) -> List<AssInfo>)
 
+    /** 对整个脚本应用任意变换（事件+样式+信息），一次提交（一个撤销点，用于分辨率重采样等整脚本操作）。 */
+    fun editScript(transform: (AssScript) -> AssScript)
+
     /**
      * 用序列化内容覆盖当前脚本，作为一个新的撤销点入栈（用于「历史版本恢复」）。
      * 解析失败时忽略。不重置撤销历史——恢复后仍可撤销回恢复前状态。

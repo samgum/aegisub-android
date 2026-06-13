@@ -124,6 +124,11 @@ internal class ProjectSessionImpl(
         commit(current.withInfo(newInfo))
     }
 
+    override fun editScript(transform: (AssScript) -> AssScript) {
+        val s = stack ?: return
+        commit(transform(s.current))
+    }
+
     override fun restoreFromContent(content: String) {
         val s = stack ?: return
         try {

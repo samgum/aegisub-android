@@ -16,6 +16,7 @@ import io.github.samgum.aegisub.domain.edit.FramerateConverter
 import io.github.samgum.aegisub.domain.edit.KaraokeGenerator
 import io.github.samgum.aegisub.domain.edit.KaraokeMode
 import io.github.samgum.aegisub.domain.edit.LineOps
+import io.github.samgum.aegisub.domain.edit.ResolutionResampler
 import io.github.samgum.aegisub.domain.edit.ShiftTarget
 import io.github.samgum.aegisub.domain.edit.SortKey
 import io.github.samgum.aegisub.domain.edit.SortLines
@@ -241,6 +242,29 @@ class EditorViewModel @Inject constructor(
      */
     fun applyTimingPostProcess(leadInMs: Long, leadOutMs: Long, gapMs: Long) {
         session.editEvents { TimePostProcess.apply(it, leadInMs, leadOutMs, gapMs) }
+    }
+
+    /**
+     * 分辨率重采样（一次撤销点）：缩放 {\pos}/{\move} + 样式字号/描边/边距 + 更新 PlayResX/Y。
+     */
+    fun resampleResolution(
+        fromW: Int, fromH: Int, toW: Int, toH: Int,
+        scalePositions: Boolean, scaleBorders: Boolean,
+    ) {
+        session.editScript {
+            ResolutionResampler.rescale(
+                it, fromW, fromH, toW, toH,
+                ResolutionResampler.Options(scalePositions, scaleBorders),
+            )
+        }
+    }
+
+    /** 当前脚本的 PlayResX/Y（缺省 384/288），供重采样对话框预填。 */
+    fun playRes(): Pair<Int, Int> {
+        val s = session.script.value ?: return 384 to 288
+        val w = s.getScriptInfo("PlayResX")?.toIntOrNull() ?: 384
+        val h = s.getScriptInfo("PlayResY")?.toIntOrNull() ?: 288
+        return w to h
     }
 
     // 注：时间偏移与样式批量替换已支持 selectedIds 参数（见上方 shiftTimes/replaceStyles）。
