@@ -32,7 +32,8 @@ class SnapshotUndoStack<T>(
 
     override fun commit(next: T, description: String): Int {
         past.addLast(current)
-        while (past.size > limit - 1) past.removeFirst()
+        // limit = 最大可撤销深度：past 最多保留 limit 条历史版本
+        while (past.size > limit) past.removeFirst()
         future.clear()
         current = next
         return past.size

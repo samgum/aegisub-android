@@ -63,7 +63,9 @@ object DialogueTokenizer {
                     if (i < s.length && s[i] == '(') {
                         out += DialogueToken(TT.OPEN_PAREN, 1)
                         i++
-                        while (i < s.length && s[i] != '}' && s[i] != '\\') {
+                        // 注意：必须同时排除 ')' —— 否则 consumeArg 停在 ')' 不推进，
+                        // 外层 while 会无限重复调用 consumeArg，导致死循环（\pos/\move/\clip 等）。
+                        while (i < s.length && s[i] != '}' && s[i] != '\\' && s[i] != ')') {
                             i = consumeArg(s, i, out)
                         }
                         if (i < s.length && s[i] == ')') {

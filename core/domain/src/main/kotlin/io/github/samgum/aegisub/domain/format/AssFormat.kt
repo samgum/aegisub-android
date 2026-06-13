@@ -17,9 +17,8 @@ class AssFormatBase(private val ssaMode: Boolean = false) : SubtitleFormat {
     override val extensions: List<String> = if (ssaMode) listOf(".ssa") else listOf(".ass")
 
     override fun canRead(content: String): Boolean =
-        content.contains("[Script Info]", ignoreCase = true) &&
-            (content.contains("[V4+ Styles]", ignoreCase = true) ||
-                content.contains("[V4 Styles]", ignoreCase = true))
+        // [Script Info] 为 ASS/SSA 专属段头，足以判定（SRT/LRC/TXT 均不含）
+        content.contains("[Script Info]", ignoreCase = true)
 
     override fun read(text: String, options: ReadOptions): AssScript {
         val info = mutableListOf<AssInfo>()
