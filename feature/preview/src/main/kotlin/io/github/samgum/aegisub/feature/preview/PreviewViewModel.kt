@@ -257,6 +257,16 @@ class PreviewViewModel @Inject constructor(
         session.editEvent(eventId) { it.copy(text = text) }
     }
 
+    /** 可视化打字：矩形 {\clip}/{\iclip} 写入（单撤销点）。 */
+    fun setEventClip(eventId: Long, x1: Int, y1: Int, x2: Int, y2: Int, inverse: Boolean) {
+        session.editEvent(eventId) { it.copy(text = VisualTags.setClip(it.text, x1, y1, x2, y2, inverse)) }
+    }
+
+    /** 可视化打字：清除 {\clip}/{\iclip}。 */
+    fun clearEventClip(eventId: Long) {
+        session.editEvent(eventId) { it.copy(text = VisualTags.removeClip(it.text)) }
+    }
+
     /** 选中上一行（并 seek 到其起始）。 */
     fun selectPrevEvent() {
         val script = session.script.value ?: return

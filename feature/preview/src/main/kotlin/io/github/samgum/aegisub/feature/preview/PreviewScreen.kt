@@ -370,6 +370,10 @@ private fun PreviewPanelContent(
                     onFadeChange = { fin, fout -> viewModel.setEventFade(selectedEvent.id, fin, fout) },
                     onClearPos = { viewModel.clearEventPos(selectedEvent.id) },
                     onClearMove = { viewModel.clearEventMove(selectedEvent.id) },
+                    onClipChange = { x1, y1, x2, y2, inv ->
+                        viewModel.setEventClip(selectedEvent.id, x1, y1, x2, y2, inv)
+                    },
+                    onClearClip = { viewModel.clearEventClip(selectedEvent.id) },
                 )
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Text("Karaoke 计时", style = MaterialTheme.typography.titleSmall)
@@ -397,11 +401,19 @@ private fun VisualTypesettingControls(
     onFadeChange: (fadeIn: Int, fadeOut: Int) -> Unit,
     onClearPos: () -> Unit,
     onClearMove: () -> Unit,
+    onClipChange: (x1: Int, y1: Int, x2: Int, y2: Int, inverse: Boolean) -> Unit,
+    onClearClip: () -> Unit,
 ) {
     var slider by remember(event.id) { mutableStateOf(VisualTags.getRotation(event.text).toFloat()) }
     val existingFade = remember(event.id, event.text) { VisualTags.getFade(event.text) }
     var fadeIn by remember(event.id) { mutableStateOf((existingFade?.fadeIn ?: 0).toString()) }
     var fadeOut by remember(event.id) { mutableStateOf((existingFade?.fadeOut ?: 0).toString()) }
+    val existingClip = remember(event.id, event.text) { VisualTags.getClip(event.text) }
+    var cx1 by remember(event.id) { mutableStateOf((existingClip?.x1 ?: 0).toString()) }
+    var cy1 by remember(event.id) { mutableStateOf((existingClip?.y1 ?: 0).toString()) }
+    var cx2 by remember(event.id) { mutableStateOf((existingClip?.x2 ?: 0).toString()) }
+    var cy2 by remember(event.id) { mutableStateOf((existingClip?.y2 ?: 0).toString()) }
+    var clipInverse by remember(event.id) { mutableStateOf(existingClip?.inverse ?: false) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
         // 模式切换
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -456,6 +468,57 @@ private fun VisualTypesettingControls(
             )
             TextButton(onClick = {
                 onFadeChange(fadeIn.toIntOrNull() ?: 0, fadeOut.toIntOrNull() ?: 0)
+            }) { Text("应用") }
+        }
+        // 矩形裁剪 {\clip}/{\iclip}
+        HorizontalDivider(Modifier.padding(vertical = 6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("\\clip", style = MaterialTheme.typography.labelMedium)
+            Spacer(Modifier.width(8.dp))
+            OutlinedTextField(
+                value = cx1, onValueChange = { cx1 = it.filter { c -> c.isDigit() || c == '-' } },
+                label = { Text("x1") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
+            )
+            OutlinedTextField(
+                value = cy1, onValueChange = { cy1 = it.filter { c -> c.isDigit() || c == '-' } },
+                label = { Text("y1") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
+            )
+            OutlinedTextField(
+                value = cx2, onValueChange = { cx2 = it.filter { c -> c.isDigit() || c == '-' } },
+                label = { Text("x2") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
+            )
+            OutlinedTextField(
+                value = cy2, onValueChange = { cy2 = it.filter { c -> c.isDigit() || c == '-' } },
+                label = { Text("y2") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FilterChip(
+                selected = !clipInverse,
+                onClick = { clipInverse = false },
+                label = { Text("\\clip 显示区内") },
+            )
+            Spacer(Modifier.width(6.dp))
+            FilterChip(
+                selected = clipInverse,
+                onClick = { clipInverse = true },
+                label = { Text("\\iclip 反向") },
+            )
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = onClearClip) { Text("清除") }
+            Button(onClick = {
+                onClipChange(
+                    cx1.toIntOrNull() ?: 0, cy1.toIntOrNull() ?: 0,
+                    cx2.toIntOrNull() ?: 0, cy2.toIntOrNull() ?: 0, clipInverse,
+                )
             }) { Text("应用") }
         }
     }
