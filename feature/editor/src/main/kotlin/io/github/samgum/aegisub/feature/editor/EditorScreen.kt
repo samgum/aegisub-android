@@ -296,8 +296,8 @@ fun EditorScreen(
     if (showDeleteEmpty) {
         AlertDialog(
             onDismissRequest = { showDeleteEmpty = false },
-            title = { Text("删除空行") },
-            text = { Text("删除所有「有效内容为空」的行（纯空、仅空白、仅覆盖标签）。绘图行保留。此操作可撤销。") },
+            title = { Text(stringResource(R.string.dialog_delete_empty)) },
+            text = { Text(stringResource(R.string.dialog_delete_empty_msg)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteEmptyLines()
@@ -546,7 +546,7 @@ private fun FindReplaceDialog(
     var ignoreCase by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("查找替换") },
+        title = { Text(stringResource(R.string.dialog_find_replace)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("查找") }, singleLine = true)
@@ -676,7 +676,7 @@ private fun ShiftTimesDialog(
     val delta = deltaText.toLongOrNull() ?: 0L
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("时间偏移") },
+        title = { Text(stringResource(R.string.dialog_shift_times)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -724,7 +724,7 @@ private fun StyleReplaceDialog(
     var to by remember { mutableStateOf(distinct.firstOrNull() ?: "") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("样式批量替换") },
+        title = { Text(stringResource(R.string.dialog_style_replace)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("把所有「${if (from.isEmpty()) "（空）" else from}」样式的事件改为另一样式。", style = MaterialTheme.typography.bodySmall)
@@ -789,7 +789,7 @@ private fun SortDialog(
     )
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("排序") },
+        title = { Text(stringResource(R.string.dialog_sort)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("排序依据", style = MaterialTheme.typography.labelMedium)
@@ -848,7 +848,7 @@ private fun FramerateDialog(
     val ratio = to / from
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("帧率转换") },
+        title = { Text(stringResource(R.string.dialog_framerate)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("源帧率", style = MaterialTheme.typography.labelMedium)
@@ -1038,7 +1038,7 @@ private fun ExportFormatDialog(
     )
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("导出格式") },
+        title = { Text(stringResource(R.string.dialog_export_format)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 formats.forEach { (fmt, label, desc) ->
@@ -1080,7 +1080,7 @@ private fun ResolutionResampleDialog(
     var scaleBorders by remember { mutableStateOf(true) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("分辨率重采样") },
+        title = { Text(stringResource(R.string.dialog_resample)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("源分辨率：$fromW × $fromH", style = MaterialTheme.typography.bodySmall)
@@ -1149,7 +1149,7 @@ private fun TimingPostProcessDialog(
     var gap by remember { mutableStateOf("200") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("时间后处理") },
+        title = { Text(stringResource(R.string.dialog_timing_pp)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -1206,7 +1206,7 @@ private fun KaraokeDialog(
     var useKf by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("卡拉OK生成") },
+        title = { Text(stringResource(R.string.dialog_karaoke)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("切分模式", style = MaterialTheme.typography.labelMedium)

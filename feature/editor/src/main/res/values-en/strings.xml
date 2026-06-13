@@ -65,4 +65,18 @@
     <string name="common_ok">OK</string>
     <string name="common_delete">Delete</string>
     <string name="common_replace_all">Replace all</string>
+
+    <!-- Dialog titles -->
+    <string name="dialog_find_replace">Find &amp; Replace</string>
+    <string name="dialog_shift_times">Shift Times</string>
+    <string name="dialog_sort">Sort Lines</string>
+    <string name="dialog_framerate">Change Framerate</string>
+    <string name="dialog_karaoke">Karaoke</string>
+    <string name="dialog_timing_pp">Timing Post-Processor</string>
+    <string name="dialog_resample">Resolution Resampler</string>
+    <string name="dialog_style_replace">Style Replace</string>
+    <string name="dialog_export_format">Export format</string>
+    <string name="dialog_delete_empty">Delete empty lines</string>
+    <string name="dialog_delete_empty_msg">Remove all lines with empty effective content (blank, whitespace, override-tags only). Drawing lines are kept. Undoable.</string>
+    <string name="dialog_history_title">History</string>
 </resources>
