@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -78,6 +79,7 @@ import io.github.samgum.aegisub.feature.editor.compact.EventEditSheet
 import io.github.samgum.aegisub.feature.editor.compact.EventListScreen
 import io.github.samgum.aegisub.feature.editor.components.EditorActions
 import io.github.samgum.aegisub.feature.editor.components.StylingAssistantSheet
+import io.github.samgum.aegisub.feature.editor.components.TranslationAssistantSheet
 import io.github.samgum.aegisub.feature.editor.expanded.EditorTwoPane
 
 /**
@@ -121,6 +123,7 @@ fun EditorScreen(
     var showFramerate by remember { mutableStateOf(false) }
     var showProperties by remember { mutableStateOf(false) }
     var showStyling by remember { mutableStateOf(false) }
+    var showTranslation by remember { mutableStateOf(false) }
 
     when (val s = state) {
         EditorUiState.Loading ->
@@ -201,6 +204,7 @@ fun EditorScreen(
             onFramerate = { showToolbox = false; showFramerate = true },
             onProperties = { showToolbox = false; showProperties = true },
             onStyling = { showToolbox = false; showStyling = true },
+            onTranslation = { showToolbox = false; showTranslation = true },
             onDeleteEmpty = { showToolbox = false; showDeleteEmpty = true },
             onStyleReplace = { showToolbox = false; showStyleReplace = true },
             onOpenStyleManager = { showToolbox = false; onOpenStyles(viewModel.projectId) },
@@ -310,6 +314,28 @@ fun EditorScreen(
                 onPrev = { if (pos > 0) editingId = events[pos - 1].id },
                 onNext = { if (pos + 1 < events.size) editingId = events[pos + 1].id },
                 onDismiss = { showStyling = false },
+            )
+        }
+    }
+
+    if (showTranslation) {
+        val loaded = state as? EditorUiState.Loaded
+        val events = loaded?.script?.events
+        if (events != null && events.isNotEmpty()) {
+            val currentId = editingId ?: events.first().id
+            val pos = events.indexOfFirst { it.id == currentId }.let { if (it < 0) 0 else it }
+            val ev = events[pos]
+            TranslationAssistantSheet(
+                event = ev,
+                position = pos,
+                total = events.size,
+                onSave = { original, translation ->
+                    viewModel.setTranslation(ev.id, original, translation)
+                    if (pos + 1 < events.size) editingId = events[pos + 1].id
+                },
+                onPrev = { if (pos > 0) editingId = events[pos - 1].id },
+                onNext = { if (pos + 1 < events.size) editingId = events[pos + 1].id },
+                onDismiss = { showTranslation = false },
             )
         }
     }
@@ -438,6 +464,7 @@ private fun ToolboxSheet(
     onFramerate: () -> Unit,
     onProperties: () -> Unit,
     onStyling: () -> Unit,
+    onTranslation: () -> Unit,
     onDeleteEmpty: () -> Unit,
     onStyleReplace: () -> Unit,
     onOpenStyleManager: () -> Unit,
@@ -477,6 +504,9 @@ private fun ToolboxSheet(
             }
             item {
                 ToolEntry(Icons.Filled.Palette, "样式助手", "逐行浏览字幕，点选样式快速分配并自动前进") { onStyling() }
+            }
+            item {
+                ToolEntry(Icons.Filled.Translate, "翻译助手", "逐行原文→译文：原文存 Name，译文存 Text，自动前进") { onTranslation() }
             }
             item {
                 ToolEntry(Icons.Filled.PlayArrow, "历史版本", "保存当前为快照 / 恢复到过往版本（可撤销）") { onOpenHistory() }

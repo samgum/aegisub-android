@@ -269,6 +269,22 @@ class EditorViewModelTest {
         assertEquals(false, v.canUndo.value)
     }
 
+    // ---------- 翻译助手（原文→Name，译文→Text）----------
+
+    @Test fun set_translation_stores_original_in_name_translation_in_text() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE_MULTI)
+        advanceUntilIdle()
+        val id = v.currentScript()!!.events[0].id
+        v.setTranslation(id, original = "Hello", translation = "你好")
+        val e = v.currentScript()!!.events[0]
+        assertEquals("Hello", e.actor)
+        assertEquals("你好", e.text)
+        // 可撤销
+        v.undo()
+        assertEquals("Hello", v.currentScript()!!.events[0].text)
+        assertEquals("", v.currentScript()!!.events[0].actor)
+    }
+
     // ---------- 历史版本恢复 ----------
 
     @Test fun take_snapshot_persists_content() = runTest(dispatcher) {

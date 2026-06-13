@@ -89,6 +89,13 @@ class EditorViewModel @Inject constructor(
     fun setEventLayer(eventId: Long, layer: Int) =
         session.editEvent(eventId) { it.copy(layer = layer) }
 
+    /**
+     * 翻译助手写入：把原文存入 Name(actor) 字段，译文写入 Text（一次撤销点）。
+     * 原文为空时仅写译文。对齐桌面 Aegisub Translation Assistant 语义。
+     */
+    fun setTranslation(eventId: Long, original: String, translation: String) =
+        session.editEvent(eventId) { it.copy(actor = original, text = translation) }
+
     /** 全局查找替换所有事件的文本（一次撤销点）。 */
     fun replaceAll(query: String, replacement: String, useRegex: Boolean, ignoreCase: Boolean) {
         session.editAllEvents { e ->
