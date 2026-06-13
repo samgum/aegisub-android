@@ -14,6 +14,7 @@ data class Project(
     val format: String,
     val updatedAt: Long,
     val lastOpenedAt: Long?,
+    val mediaUri: String?,
 )
 
 /**
@@ -28,6 +29,8 @@ interface ProjectRepository {
     suspend fun updateContent(id: Long, content: String, now: Long)
     suspend fun delete(id: Long)
     suspend fun touchLastOpened(id: Long, now: Long)
+    suspend fun getMediaUri(id: Long): String?
+    suspend fun setMediaUri(id: Long, mediaUri: String)
 }
 
 class RoomProjectRepository(
@@ -63,6 +66,12 @@ class RoomProjectRepository(
 
     override suspend fun touchLastOpened(id: Long, now: Long) = dao.touchLastOpened(id, now)
 
+    override suspend fun getMediaUri(id: Long): String? = dao.getById(id)?.mediaUri
+
+    override suspend fun setMediaUri(id: Long, mediaUri: String) {
+        dao.updateMediaUri(id, mediaUri)
+    }
+
     private fun ProjectEntity.toModel() =
-        Project(id = id, name = name, format = format, updatedAt = updatedAt, lastOpenedAt = lastOpenedAt)
+        Project(id = id, name = name, format = format, updatedAt = updatedAt, lastOpenedAt = lastOpenedAt, mediaUri = mediaUri)
 }

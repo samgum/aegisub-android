@@ -1,0 +1,294 @@
+package io.github.samgum.aegisub.feature.preview
+
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.samgum.aegisub.domain.model.AssEvent
+import io.github.samgum.aegisub.feature.preview.components.PlayerSurface
+import io.github.samgum.aegisub.feature.preview.components.SubtitleOverlay
+
+/**
+ * 预览屏入口：加载→分发（Loading/Error/Loaded）→ compact/expanded。
+ * SAF 选片在本屏发起，结果回写 ViewModel.attachMedia。
+ *
+ * @author 伤感咩吖
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PreviewScreen(
+    onBack: () -> Unit,
+    viewModel: PreviewViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+            viewModel.attachMedia(uri.toString())
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("预览") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            when (val s = state) {
+                PreviewUiState.Loading ->
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+
+                is PreviewUiState.Error ->
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("加载失败：${s.message}")
+                    }
+
+                is PreviewUiState.Loaded -> {
+                    val isCompact = LocalConfiguration.current.screenWidthDp < 600
+                    if (isCompact) {
+                        CompactPreview(
+                            state = s,
+                            viewModel = viewModel,
+                            onPickVideo = { pickVideo.launch(arrayOf("video/*")) },
+                        )
+                    } else {
+                        ExpandedPreview(
+                            state = s,
+                            viewModel = viewModel,
+                            onPickVideo = { pickVideo.launch(arrayOf("video/*")) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoBlock(
+    state: PreviewUiState.Loaded,
+    viewModel: PreviewViewModel,
+    onPickVideo: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .background(Color.Black),
+            contentAlignment = Alignment.Center,
+        ) {
+            PlayerSurface(player = viewModel.videoPlayer, modifier = Modifier.fillMaxSize())
+            SubtitleOverlay(
+                script = state.script,
+                positionMs = state.playback.positionMs,
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (!state.hasMedia) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("未挂载视频", color = Color.White)
+                    Button(onClick = onPickVideo) { Text("选择视频") }
+                }
+            }
+        }
+        PlaybackControls(
+            playback = state.playback,
+            onPlayPause = viewModel::playPause,
+            onSeek = viewModel::seekTo,
+            onSpeedChange = viewModel::setSpeed,
+        )
+    }
+}
+
+@Composable
+private fun PlaybackControls(
+    playback: PlaybackState,
+    onPlayPause: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onSpeedChange: (Float) -> Unit,
+) {
+    val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+    var speedExpanded by remember { mutableStateOf(false) }
+    Column(Modifier.padding(horizontal = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onPlayPause) {
+                Icon(
+                    if (playback.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = "播放/暂停",
+                )
+            }
+            Text(formatTime(playback.positionMs), style = MaterialTheme.typography.bodySmall)
+            Box {
+                TextButton(onClick = { speedExpanded = true }) { Text("${playback.speed}x") }
+                DropdownMenu(expanded = speedExpanded, onDismissRequest = { speedExpanded = false }) {
+                    speeds.forEach { rate ->
+                        DropdownMenuItem(
+                            text = { Text("${rate}x") },
+                            onClick = { onSpeedChange(rate); speedExpanded = false },
+                        )
+                    }
+                }
+            }
+            Text(" / ${formatTime(playback.durationMs)}", style = MaterialTheme.typography.bodySmall)
+        }
+        val ratio = if (playback.durationMs > 0) {
+            (playback.positionMs.toFloat() / playback.durationMs).coerceIn(0f, 1f)
+        } else 0f
+        Slider(
+            value = ratio,
+            onValueChange = { v ->
+                if (playback.durationMs > 0) onSeek((v * playback.durationMs).toLong())
+            },
+        )
+    }
+}
+
+@Composable
+private fun CompactPreview(
+    state: PreviewUiState.Loaded,
+    viewModel: PreviewViewModel,
+    onPickVideo: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
+        VideoBlock(state = state, viewModel = viewModel, onPickVideo = onPickVideo)
+        EventListColumn(
+            events = state.script.events,
+            currentEventId = state.currentEventId,
+            onEventClick = viewModel::seekToEvent,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+@Composable
+private fun ExpandedPreview(
+    state: PreviewUiState.Loaded,
+    viewModel: PreviewViewModel,
+    onPickVideo: () -> Unit,
+) {
+    Row(Modifier.fillMaxSize()) {
+        VideoBlock(
+            state = state,
+            viewModel = viewModel,
+            onPickVideo = onPickVideo,
+            modifier = Modifier.weight(0.6f),
+        )
+        EventListColumn(
+            events = state.script.events,
+            currentEventId = state.currentEventId,
+            onEventClick = viewModel::seekToEvent,
+            modifier = Modifier.weight(0.4f),
+        )
+    }
+}
+
+@Composable
+private fun EventListColumn(
+    events: List<AssEvent>,
+    currentEventId: Long?,
+    onEventClick: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(modifier = modifier) {
+        items(events, key = { it.id }) { event ->
+            PreviewEventRow(
+                event = event,
+                isCurrent = event.id == currentEventId,
+                onClick = { onEventClick(event.id) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun PreviewEventRow(event: AssEvent, isCurrent: Boolean, onClick: () -> Unit) {
+    ListItem(
+        headlineContent = {
+            Text(
+                text = event.strippedText.ifBlank { "（无文本）" },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = if (event.comment) MaterialTheme.colorScheme.outline
+                else MaterialTheme.colorScheme.onSurface,
+            )
+        },
+        supportingContent = {
+            Text(
+                text = "${event.start.toAssString(false)} → ${event.end.toAssString(false)}  ·  ${event.style}",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        },
+        modifier = Modifier
+            .background(if (isCurrent) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+            .clickable(onClick = onClick),
+    )
+}
+
+/** ms → "M:SS" 或 "H:MM:SS"。 */
+private fun formatTime(ms: Long): String {
+    if (ms <= 0) return "0:00"
+    val totalSec = ms / 1000
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}

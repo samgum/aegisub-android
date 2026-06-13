@@ -155,6 +155,8 @@ class EditorViewModelTest {
         }
         override suspend fun delete(id: Long) {}
         override suspend fun touchLastOpened(id: Long, now: Long) {}
+        override suspend fun getMediaUri(id: Long): String? = null
+        override suspend fun setMediaUri(id: Long, mediaUri: String) {}
     }
 
     private class ThrowingRepo : ProjectRepository {
@@ -165,6 +167,8 @@ class EditorViewModelTest {
         override suspend fun updateContent(id: Long, content: String, now: Long) {}
         override suspend fun delete(id: Long) {}
         override suspend fun touchLastOpened(id: Long, now: Long) {}
+        override suspend fun getMediaUri(id: Long): String? = null
+        override suspend fun setMediaUri(id: Long, mediaUri: String) {}
     }
 }
 

@@ -2,7 +2,7 @@
 
 > Android 平台上最接近桌面 Aegisub 体验的专业级字幕编辑器。
 
-[![Status](https://img.shields.io/badge/status-Phase%202%20(Editor%20Loop)-blue)](docs/superpowers/specs/2026-06-13-phase2-editor-design.md)
+[![Status](https://img.shields.io/badge/status-Phase%203%20(Video%20Preview)-blue)](docs/superpowers/specs/2026-06-13-phase3-video-preview-design.md)
 [![License](https://img.shields.io/badge/license-Aegisub%20BSD-green)](LICENCE)
 [![Platform](https://img.shields.io/badge/platform-Android%208.0%2B-3DDC84)]()
 [![Language](https://img.shields.io/badge/language-Kotlin-7F52FF)]()
@@ -34,7 +34,7 @@
 | `:core:data` | Room + DataStore：项目管理 / 自动保存 / 历史版本 | Phase 1 |
 | `:core:media` | Media3 / ExoPlayer + 音频波形提取 | Phase 3-4 |
 | `:core:ass-render` | libass JNI 桥（预留） | 远期 |
-| `:feature:*` | Compose UI：字幕列表 / 编辑底栏 / 双栏布局（`:feature:editor` 已落地） | Phase 2 |
+| `:feature:*` | Compose UI：字幕列表 / 编辑底栏 / 双栏布局（`:feature:editor`）/ 视频预览+字幕叠加（`:feature:preview`） | Phase 2-3 |
 | `:app` | 应用入口 + 导航 + Hilt DI + 响应式布局 | Phase 1+ |
 
 详见 [核心设计 Spec](docs/superpowers/specs/2026-06-13-aegisub-android-core-design.md) 与 [Roadmap](ROADMAP.md)。

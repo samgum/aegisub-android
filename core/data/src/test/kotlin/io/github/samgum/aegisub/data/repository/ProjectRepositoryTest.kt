@@ -61,6 +61,15 @@ class ProjectRepositoryTest {
         assertEquals("a", list[0].name)
         assertEquals("b", list[1].name)
     }
+
+    @Test fun set_then_get_media_uri() = runTest {
+        val dao = FakeProjectDao()
+        val r = repo(dao)
+        val id = r.createProject("a", "ass", "x")
+        assertEquals(null, r.getMediaUri(id))
+        r.setMediaUri(id, "content://video/1")
+        assertEquals("content://video/1", r.getMediaUri(id))
+    }
 }
 
 /** 内存假 DAO，实现 ProjectDao 接口用于测试仓储逻辑。 */
@@ -86,5 +95,9 @@ private class FakeProjectDao : ProjectDao {
     override suspend fun deleteById(id: Long) { store.remove(id) }
     override suspend fun touchLastOpened(id: Long, ts: Long) {
         store[id]?.let { store[id] = it.copy(lastOpenedAt = ts) }
+    }
+
+    override suspend fun updateMediaUri(id: Long, uri: String) {
+        store[id]?.let { store[id] = it.copy(mediaUri = uri) }
     }
 }

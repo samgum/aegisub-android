@@ -26,7 +26,7 @@ object DataModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): SubtitleDatabase =
         Room.databaseBuilder(context, SubtitleDatabase::class.java, "subtitle.db")
-            .fallbackToDestructiveMigration()
+            .addMigrations(SubtitleDatabase.MIGRATION_1_2)
             .build()
 
     @Provides
