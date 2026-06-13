@@ -94,12 +94,12 @@ class PreviewViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PreviewUiState.Loading)
 
-    val activeSubtitle: StateFlow<SubtitleRenderInfo?> = combine(base, player.state) { b, playback ->
+    val activeSubtitles: StateFlow<List<SubtitleRenderInfo>> = combine(base, player.state) { b, playback ->
         when (b) {
-            is BaseState.Ready -> ActiveSubtitleResolver.renderInfo(b.script, playback.positionMs)
-            else -> null
+            is BaseState.Ready -> ActiveSubtitleResolver.renderInfos(b.script, playback.positionMs)
+            else -> emptyList()
         }
-    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val canUndo: StateFlow<Boolean> = session.canUndo
     val canRedo: StateFlow<Boolean> = session.canRedo

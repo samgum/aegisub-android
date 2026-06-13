@@ -532,8 +532,8 @@ private fun VisualTypesettingControls(
  */
 @Composable
 private fun ActiveSubtitleLayer(viewModel: PreviewViewModel) {
-    val info by viewModel.activeSubtitle.collectAsStateWithLifecycle()
-    SubtitleOverlay(renderInfo = info, modifier = Modifier.fillMaxSize())
+    val infos by viewModel.activeSubtitles.collectAsStateWithLifecycle()
+    SubtitleOverlay(renderInfos = infos, modifier = Modifier.fillMaxSize())
 }
 
 @Composable

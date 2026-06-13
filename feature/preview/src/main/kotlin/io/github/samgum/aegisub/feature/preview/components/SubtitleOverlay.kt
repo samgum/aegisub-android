@@ -33,70 +33,69 @@ import io.github.samgum.aegisub.domain.preview.SubtitleRenderInfo
  */
 @Composable
 fun SubtitleOverlay(
-    renderInfo: SubtitleRenderInfo?,
+    renderInfos: List<SubtitleRenderInfo>,
     modifier: Modifier = Modifier,
 ) {
-    if (renderInfo == null || renderInfo.text.isBlank()) {
+    if (renderInfos.isEmpty()) {
         Box(modifier.fillMaxSize())
         return
     }
-    val info = renderInfo
-    val style = info.style
     val measurer = rememberTextMeasurer()
 
     Canvas(modifier = modifier.fillMaxSize()) {
-        val scaleY = (size.height / info.playResY.coerceAtLeast(1)).toFloat()
-        val scaleX = (size.width / info.playResX.coerceAtLeast(1)).toFloat()
-        val fontPx = (style.fontSize * scaleY).toFloat().coerceAtLeast(1f)
-        val outlinePx = (style.outlineWidth * scaleY).toFloat().coerceAtLeast(0f)
-        val shadowPx = (style.shadowWidth * scaleY).toFloat().coerceAtLeast(0f)
-        val marginLeftPx = info.margins.left * scaleX
-        val marginRightPx = info.margins.right * scaleX
-        val marginTopPx = info.margins.vertical * scaleY
-        val baseStyle = TextStyle(
-            color = style.primary.toColor(),
-            fontSize = (fontPx / (density * fontScale)).sp,
-            fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Normal,
-            fontStyle = if (style.italic) FontStyle.Italic else FontStyle.Normal,
-        )
-        val maxWidthPx = (size.width - marginLeftPx - marginRightPx).coerceAtLeast(1f).toInt()
-        val layout = measurer.measure(
-            text = info.text,
-            style = baseStyle,
-            constraints = Constraints(maxWidth = maxWidthPx),
-            overflow = TextOverflow.Visible,
-        )
-        val topLeft = computeTopLeft(
-            alignment = style.alignment,
-            pos = info.pos,
-            scaleX = scaleX,
-            scaleY = scaleY,
-            layoutWidth = layout.size.width.toFloat(),
-            layoutHeight = layout.size.height.toFloat(),
-            canvasWidth = size.width,
-            canvasHeight = size.height,
-            marginLeftPx = marginLeftPx,
-            marginRightPx = marginRightPx,
-            marginVerticalPx = marginTopPx,
-        )
-        // 阴影层
-        if (shadowPx > 0f) {
-            drawText(
-                textLayoutResult = layout,
-                topLeft = Offset(topLeft.x + shadowPx, topLeft.y + shadowPx),
+        renderInfos.forEach { info ->
+            if (info.text.isBlank()) return@forEach
+            val style = info.style
+            val scaleY = (size.height / info.playResY.coerceAtLeast(1)).toFloat()
+            val scaleX = (size.width / info.playResX.coerceAtLeast(1)).toFloat()
+            val fontPx = (style.fontSize * scaleY).toFloat().coerceAtLeast(1f)
+            val outlinePx = (style.outlineWidth * scaleY).toFloat().coerceAtLeast(0f)
+            val shadowPx = (style.shadowWidth * scaleY).toFloat().coerceAtLeast(0f)
+            val marginLeftPx = info.margins.left * scaleX
+            val marginRightPx = info.margins.right * scaleX
+            val marginTopPx = info.margins.vertical * scaleY
+            val baseStyle = TextStyle(
+                color = style.primary.toColor(),
+                fontSize = (fontPx / (density * fontScale)).sp,
+                fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Normal,
+                fontStyle = if (style.italic) FontStyle.Italic else FontStyle.Normal,
             )
-        }
-        // 描边层
-        if (outlinePx > 0f) {
-            drawText(
-                textLayoutResult = layout,
-                topLeft = topLeft,
-                color = style.outline.toColor(),
-                drawStyle = Stroke(width = outlinePx * 2f),
+            val maxWidthPx = (size.width - marginLeftPx - marginRightPx).coerceAtLeast(1f).toInt()
+            val layout = measurer.measure(
+                text = info.text,
+                style = baseStyle,
+                constraints = Constraints(maxWidth = maxWidthPx),
+                overflow = TextOverflow.Visible,
             )
+            val topLeft = computeTopLeft(
+                alignment = style.alignment,
+                pos = info.pos,
+                scaleX = scaleX,
+                scaleY = scaleY,
+                layoutWidth = layout.size.width.toFloat(),
+                layoutHeight = layout.size.height.toFloat(),
+                canvasWidth = size.width,
+                canvasHeight = size.height,
+                marginLeftPx = marginLeftPx,
+                marginRightPx = marginRightPx,
+                marginVerticalPx = marginTopPx,
+            )
+            if (shadowPx > 0f) {
+                drawText(
+                    textLayoutResult = layout,
+                    topLeft = Offset(topLeft.x + shadowPx, topLeft.y + shadowPx),
+                )
+            }
+            if (outlinePx > 0f) {
+                drawText(
+                    textLayoutResult = layout,
+                    topLeft = topLeft,
+                    color = style.outline.toColor(),
+                    drawStyle = Stroke(width = outlinePx * 2f),
+                )
+            }
+            drawText(textLayoutResult = layout, topLeft = topLeft)
         }
-        // 填充层
-        drawText(textLayoutResult = layout, topLeft = topLeft)
     }
 }
 

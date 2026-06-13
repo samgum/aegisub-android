@@ -38,23 +38,41 @@ object ActiveSubtitleResolver {
                 positionMs < event.end.millis
         }
 
+    /** 返回当前时间点所有活动事件（非注释、start <= t < end），按层降序（高层在上层）。 */
+    fun activeEvents(script: AssScript, positionMs: Long): List<AssEvent> =
+        script.events.asSequence()
+            .filter { event ->
+                !event.comment &&
+                    event.start.millis <= positionMs &&
+                    positionMs < event.end.millis
+            }
+            .sortedByDescending { it.layer }
+            .toList()
+
     /** 返回当前应叠加的渲染信息（无活动事件返回 null）。 */
-    fun renderInfo(script: AssScript, positionMs: Long): SubtitleRenderInfo? {
-        val event = activeEvent(script, positionMs) ?: return null
-        val style = resolveStyle(script, event)
-        val margins = Margins(
-            left = style.margins.left + event.margins.left,
-            right = style.margins.right + event.margins.right,
-            vertical = style.margins.vertical + event.margins.vertical,
-        )
-        return SubtitleRenderInfo(
-            text = event.strippedText,
-            style = style,
-            margins = margins,
-            playResX = script.getScriptInfo("PlayResX")?.toIntOrNull() ?: 384,
-            playResY = script.getScriptInfo("PlayResY")?.toIntOrNull() ?: 288,
-            pos = VisualTags.getPos(event.text),
-        )
+    fun renderInfo(script: AssScript, positionMs: Long): SubtitleRenderInfo? =
+        renderInfos(script, positionMs).firstOrNull()
+
+    /** 返回当前应叠加的全部渲染信息（按层降序，供叠加层逐条绘制堆叠）。 */
+    fun renderInfos(script: AssScript, positionMs: Long): List<SubtitleRenderInfo> {
+        val playResX = script.getScriptInfo("PlayResX")?.toIntOrNull() ?: 384
+        val playResY = script.getScriptInfo("PlayResY")?.toIntOrNull() ?: 288
+        return activeEvents(script, positionMs).map { event ->
+            val style = resolveStyle(script, event)
+            val margins = Margins(
+                left = style.margins.left + event.margins.left,
+                right = style.margins.right + event.margins.right,
+                vertical = style.margins.vertical + event.margins.vertical,
+            )
+            SubtitleRenderInfo(
+                text = event.strippedText,
+                style = style,
+                margins = margins,
+                playResX = playResX,
+                playResY = playResY,
+                pos = VisualTags.getPos(event.text),
+            )
+        }
     }
 
     /** 样式解析：按名匹配 → Default → 首个 → 默认 AssStyle。 */

@@ -37,6 +37,28 @@ class ActiveSubtitleResolverTest {
         assertEquals(0L, ActiveSubtitleResolver.activeEvent(script, 1_000)?.id)
     }
 
+    @Test fun activeEvents_returns_all_sorted_by_layer_desc() {
+        // 两行重叠：layer 5 与 layer 0；高层应排前（绘制在上层）
+        val s = AssScript(
+            events = persistentListOf(
+                AssEvent(id = 0, layer = 0, start = SubTime.ofMillis(0), end = SubTime.ofMillis(2_000), text = "底"),
+                AssEvent(id = 1, layer = 5, start = SubTime.ofMillis(0), end = SubTime.ofMillis(2_000), text = "顶"),
+            ),
+        )
+        val list = ActiveSubtitleResolver.activeEvents(s, 1_000)
+        assertEquals(listOf(1L, 0L), list.map { it.id })
+    }
+
+    @Test fun renderInfos_returns_one_per_active_event() {
+        val s = AssScript(
+            events = persistentListOf(
+                AssEvent(id = 0, start = SubTime.ofMillis(0), end = SubTime.ofMillis(2_000), text = "A"),
+                AssEvent(id = 1, start = SubTime.ofMillis(0), end = SubTime.ofMillis(2_000), text = "B"),
+            ),
+        )
+        assertEquals(2, ActiveSubtitleResolver.renderInfos(s, 1_000).size)
+    }
+
     @Test fun activeEvent_at_end_returns_null() {
         // 半开区间 [start, end)：t == end 不属于本行
         assertNull(ActiveSubtitleResolver.activeEvent(script, 3_000))
