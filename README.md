@@ -2,7 +2,7 @@
 
 > Android 平台上最接近桌面 Aegisub 体验的专业级字幕编辑器。
 
-[![Status](https://img.shields.io/badge/status-Phase%203%20(Video%20Preview)-blue)](docs/superpowers/specs/2026-06-13-phase3-video-preview-design.md)
+[![Status](https://img.shields.io/badge/status-Phase%207%20(Core%20Complete)-blue)](ROADMAP.md)
 [![License](https://img.shields.io/badge/license-Aegisub%20BSD-green)](LICENCE)
 [![Platform](https://img.shields.io/badge/platform-Android%208.0%2B-3DDC84)]()
 [![Language](https://img.shields.io/badge/language-Kotlin-7F52FF)]()
@@ -13,16 +13,21 @@
 
 ---
 
-## ✨ 特性目标
+## ✨ 特性
+
+**已交付（Phase 0–7 核心闭环）**
 
 - **多格式**：ASS / SSA / SRT / LRC / TXT，导入导出双向，自动识别与统一格式。
-- **无损精度**：内部以微秒存储时间，ASS 厘秒、SRT/LRC 毫秒往返零精度损失。
+- **无损精度**：内部以微秒存储时间，ASS 厘秒 / 毫秒 / 自动三档导出精度，往返零精度损失。
 - **LRC 全格式**：支持 `[mm:ss.xx]` `[mm:ss.xxx]` `[mm:ss:xx]` `[mm:ss:xxx]` 及混合格式文件。
-- **专业编辑**：撤销重做、历史版本、自动保存、查找替换（正则）、批量操作。
-- **多媒体**：视频预览（Media3/ExoPlayer）、音频波形/频谱、逐帧、关键帧、打轴辅助。
-- **响应式**：手机 / 平板 / 横竖屏 / 折叠屏 / DeX / Android Desktop Mode / 外接键鼠。
-- **超大文件**：虚拟列表 + 异步加载 + 结构共享撤销引擎，目标 10 万行可编辑。
-- **远期预留**：Lua Automation、插件系统、libass JNI 渲染、AI 辅助字幕。
+- **专业编辑**：撤销重做（CoW 快照，有界内存治理）、历史版本恢复、防抖自动保存、查找替换（正则）、批量操作（时间偏移 / 删除空行 / 样式批量替换）。
+- **样式编辑器**：名称 / 字体 / 字号 / 四色 RGBA / 粗斜下划删除线 / 九宫对齐 / L-R-V 边距 / 描边阴影 / 边框类型 / 缩放间距旋转 / 编码，全字段编辑。
+- **多媒体**：视频预览（Media3/ExoPlayer）、音频波形 + 频谱热图双视图（radix-2 FFT）、逐帧（FPS 检测）、打轴辅助（WASD 踩点 + 拖拽手柄 + 帧级微调）。
+- **响应式**：手机 / 平板 / 横竖屏，按用户布局偏好或屏宽断点分派 compact/expanded。
+- **首选项**：主题 / 导出精度 / 布局，DataStore 持久化。
+- **超大文件**：虚拟列表 + 结构共享撤销引擎，常规规模流畅可编辑。
+
+**远期预留**：Lua Automation、插件系统、libass JNI 精确渲染、AI 辅助字幕、Karaoke 音节编辑、关键帧辅助、持久向量（bit-partitioned trie）支撑 10 万行级。
 
 ## 🏗️ 架构
 
