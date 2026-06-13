@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.samgum.aegisub.data.repository.ProjectRepository
 import io.github.samgum.aegisub.data.session.ProjectSessionManager
+import io.github.samgum.aegisub.domain.audio.SpectrogramData
 import io.github.samgum.aegisub.domain.audio.Waveform
 import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.domain.preview.ActiveSubtitleResolver
@@ -66,6 +67,9 @@ class PreviewViewModel @Inject constructor(
 
     private val _waveform = MutableStateFlow<Waveform?>(null)
     val waveform: StateFlow<Waveform?> = _waveform.asStateFlow()
+
+    private val _spectrogram = MutableStateFlow<SpectrogramData?>(null)
+    val spectrogram: StateFlow<SpectrogramData?> = _spectrogram.asStateFlow()
 
     private val base = combine(session.script, session.errorMessage, _hasMedia) { script, error, hasMedia ->
         when {
@@ -134,6 +138,37 @@ class PreviewViewModel @Inject constructor(
 
     fun setSpeed(rate: Float) {
         player.setSpeed(rate)
+    }
+
+    /** 前进一帧（逐帧预览）。 */
+    fun frameStepForward() = player.seekNextFrame()
+
+    /** 后退一帧。 */
+    fun frameStepBack() = player.seekPreviousFrame()
+
+    /** 当前帧率（0f 表示未知），用于帧级微调。 */
+    fun fps(): Float = player.state.value.fps
+
+    /** 帧级时长（毫秒）；帧率未知时按 30fps。 */
+    private fun frameDurationMs(): Long {
+        val f = player.state.value.fps.let { if (it > 0f) it else 30f }
+        return (1000.0f / f).toLong().coerceAtLeast(1L)
+    }
+
+    /** 选中行起始 ±1 帧。 */
+    fun nudgeStartByFrame(forward: Boolean) {
+        val id = _selectedEventId.value ?: return
+        val event = session.script.value?.events?.firstOrNull { it.id == id } ?: return
+        val delta = if (forward) frameDurationMs() else -frameDurationMs()
+        editEventTimes(id, SubTime.ofMillis(event.start.millis + delta), event.end)
+    }
+
+    /** 选中行结束 ±1 帧。 */
+    fun nudgeEndByFrame(forward: Boolean) {
+        val id = _selectedEventId.value ?: return
+        val event = session.script.value?.events?.firstOrNull { it.id == id } ?: return
+        val delta = if (forward) frameDurationMs() else -frameDurationMs()
+        editEventTimes(id, event.start, SubTime.ofMillis(event.end.millis + delta))
     }
 
     /** 选中一行：seek 到该行开始 + 标记为编辑目标。 */
@@ -221,15 +256,24 @@ class PreviewViewModel @Inject constructor(
         player.release()
     }
 
-    /** 异步提取音频波形（挂载/更换视频时触发）。 */
+    /** 异步提取音频波形 + 频谱（一次解码，挂载/更换视频时触发）。 */
     private fun loadWaveform(uri: String) {
         viewModelScope.launch {
-            _waveform.value = extractor.extract(uri, WAVEFORM_BUCKETS)
+            val analysis = extractor.extractFull(uri, WAVEFORM_BUCKETS, WAVEFORM_BUCKETS, SPECTROGRAM_BINS)
+            if (analysis != null) {
+                _waveform.value = analysis.waveform
+                _spectrogram.value = analysis.spectrogram
+            } else {
+                _waveform.value = null
+                _spectrogram.value = null
+            }
         }
     }
 
     private companion object {
         const val WAVEFORM_BUCKETS = 300
+        /** 频谱频率 bin 数（低频段，对字幕足够）。 */
+        const val SPECTROGRAM_BINS = 96
     }
 
     private sealed interface BaseState {

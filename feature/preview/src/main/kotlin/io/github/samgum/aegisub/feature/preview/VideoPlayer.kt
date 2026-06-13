@@ -13,6 +13,8 @@ data class PlaybackState(
     val durationMs: Long = 0L,
     val speed: Float = 1.0f,
     val isReady: Boolean = false,
+    /** 视频帧率；0f 表示未知（用于逐帧步进与帧级微调）。 */
+    val fps: Float = 0f,
 )
 
 /**
@@ -28,5 +30,9 @@ interface VideoPlayer {
     fun pause()
     fun seekTo(positionMs: Long)
     fun setSpeed(rate: Float)
+    /** 前进一帧（逐帧预览）。 */
+    fun seekNextFrame()
+    /** 后退一帧；帧率未知时按 30fps 近似。 */
+    fun seekPreviousFrame()
     fun release()
 }

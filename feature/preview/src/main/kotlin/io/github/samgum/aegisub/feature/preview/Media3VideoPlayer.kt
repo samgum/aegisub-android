@@ -1,6 +1,7 @@
 package io.github.samgum.aegisub.feature.preview
 
 import android.content.Context
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -52,13 +53,28 @@ class Media3VideoPlayer @Inject constructor(
                         durationMs = duration,
                         positionMs = exoPlayer.currentPosition.coerceAtLeast(0L),
                     )
+                    readFps()
                 }
             }
 
             override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
                 _state.value = _state.value.copy(speed = playbackParameters.speed)
             }
+
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                // 帧率在轨道就绪后由 videoFormat 提供；此处顺带再探一次
+                readFps()
+            }
         })
+    }
+
+    /** 从当前视频 Format 读取帧率写入 [state]；未知（C.LENGTH_UNSET）记为 0。 */
+    private fun readFps() {
+        val formatFps = exoPlayer.videoFormat?.frameRate ?: Format.NO_VALUE.toFloat()
+        val fps = if (formatFps > 0f) formatFps else 0f
+        if (_state.value.fps != fps) {
+            _state.value = _state.value.copy(fps = fps)
+        }
     }
 
     override fun setMedia(uri: String) {
@@ -77,6 +93,27 @@ class Media3VideoPlayer @Inject constructor(
 
     override fun setSpeed(rate: Float) {
         exoPlayer.playbackParameters = PlaybackParameters(rate)
+    }
+
+    override fun seekNextFrame() {
+        // 前进一帧：帧率已知用 1000/fps，未知按 30fps(≈33ms) 近似；ExoPlayer 会落到最近帧
+        if (!_state.value.isReady) return
+        val fps = _state.value.fps.let { if (it > 0f) it else 30f }
+        val frameMs = (1000.0f / fps).toLong().coerceAtLeast(1L)
+        val maxPos = exoPlayer.duration.coerceAtLeast(0L)
+        val target = (exoPlayer.currentPosition + frameMs).coerceAtMost(maxPos)
+        exoPlayer.seekTo(target)
+        updatePosition()
+    }
+
+    override fun seekPreviousFrame() {
+        // 后退一帧：帧率已知用 1000/fps，未知按 30fps(≈33ms) 近似
+        if (!_state.value.isReady) return
+        val fps = _state.value.fps.let { if (it > 0f) it else 30f }
+        val frameMs = (1000.0f / fps).toLong().coerceAtLeast(1L)
+        val target = (exoPlayer.currentPosition - frameMs).coerceAtLeast(0L)
+        exoPlayer.seekTo(target)
+        updatePosition()
     }
 
     override fun release() {

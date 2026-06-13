@@ -216,22 +216,85 @@ class PreviewViewModelTest {
         assertEquals("撤销应回到原 1s", 1_000L, e.start.millis)
     }
 
+    // ---------- 逐帧 + FPS ----------
+
+    @Test fun fps_exposed_from_player() = runTest(dispatcher) {
+        val fake = FakeVideoPlayer(durationMs = 10_000, fps = 25f)
+        val v = vm(player = fake)
+        advanceUntilIdle()
+        assertEquals(25f, v.fps(), 0.001f)
+    }
+
+    @Test fun frame_step_forward_advances_one_frame() = runTest(dispatcher) {
+        // 25fps → 一帧 = 40ms
+        val fake = FakeVideoPlayer(durationMs = 10_000, fps = 25f)
+        val v = vm(player = fake)
+        advanceUntilIdle()
+        fake.emitPosition(1_000)
+        v.frameStepForward()
+        assertEquals(1_040L, fake.state.value.positionMs)
+    }
+
+    @Test fun frame_step_back_clamps_at_zero() = runTest(dispatcher) {
+        val fake = FakeVideoPlayer(durationMs = 10_000, fps = 25f)
+        val v = vm(player = fake)
+        advanceUntilIdle()
+        fake.emitPosition(20) // 不足一帧
+        v.frameStepBack()
+        assertEquals(0L, fake.state.value.positionMs)
+    }
+
+    @Test fun frame_step_falls_back_to_30fps_when_unknown() = runTest(dispatcher) {
+        val fake = FakeVideoPlayer(durationMs = 10_000, fps = 0f)
+        val v = vm(player = fake)
+        advanceUntilIdle()
+        fake.emitPosition(1_000)
+        v.frameStepForward()
+        // 30fps → ≈33ms（1000/30 截断）
+        assertEquals(1_033L, fake.state.value.positionMs)
+    }
+
+    @Test fun nudge_start_by_frame_uses_fps() = runTest(dispatcher) {
+        val fake = FakeVideoPlayer(durationMs = 100_000, fps = 50f) // 50fps → 20ms/帧
+        val v = vm(player = fake)
+        advanceUntilIdle()
+        v.selectEvent(0) // 第一句 start=1.000s
+        v.nudgeStartByFrame(forward = true)
+        advanceUntilIdle()
+        val e = (v.state.value as PreviewUiState.Loaded).script.events[0]
+        assertEquals(1_020L, e.start.millis)
+    }
+
     // ---------- fakes ----------
 
     private object NoopWaveformExtractor : WaveformExtractor {
         override suspend fun extract(uri: String, bucketCount: Int) = null
+        override suspend fun extractFull(uri: String, bucketCount: Int, frameCount: Int, bins: Int) = null
     }
 
-    private class FakeVideoPlayer(private val durationMs: Long = 0L) : VideoPlayer {
-        override val state = MutableStateFlow(PlaybackState(durationMs = durationMs))
+    private class FakeVideoPlayer(
+        private val durationMs: Long = 0L,
+        private val fps: Float = 0f,
+    ) : VideoPlayer {
+        override val state = MutableStateFlow(PlaybackState(durationMs = durationMs, fps = fps))
         var seekedTo: Long? = null
         var mediaSet: String? = null
         var released = false
         override fun setMedia(uri: String) { mediaSet = uri }
         override fun play() { state.value = state.value.copy(isPlaying = true) }
         override fun pause() { state.value = state.value.copy(isPlaying = false) }
-        override fun seekTo(positionMs: Long) { seekedTo = positionMs }
+        override fun seekTo(positionMs: Long) { seekedTo = positionMs; state.value = state.value.copy(positionMs = positionMs) }
         override fun setSpeed(rate: Float) { state.value = state.value.copy(speed = rate) }
+        override fun seekNextFrame() {
+            val f = if (state.value.fps > 0) state.value.fps else 30f
+            val target = state.value.positionMs + (1000f / f).toLong()
+            seekTo(target)
+        }
+        override fun seekPreviousFrame() {
+            val f = if (state.value.fps > 0) state.value.fps else 30f
+            val target = (state.value.positionMs - (1000f / f).toLong()).coerceAtLeast(0L)
+            seekTo(target)
+        }
         override fun release() { released = true }
         fun emitPosition(ms: Long) { state.value = state.value.copy(positionMs = ms) }
     }

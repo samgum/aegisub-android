@@ -54,6 +54,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -66,6 +67,7 @@ import io.github.samgum.aegisub.feature.preview.components.NudgeTarget
 import io.github.samgum.aegisub.feature.preview.components.PlayerSurface
 import io.github.samgum.aegisub.feature.preview.components.SubtitleOverlay
 import io.github.samgum.aegisub.feature.preview.components.AudioTimeline
+import io.github.samgum.aegisub.feature.preview.components.SpectrogramView
 import io.github.samgum.aegisub.feature.preview.components.TimingEditPanel
 
 /**
@@ -131,6 +133,9 @@ fun PreviewScreen(
                         val selectedId = (state as? PreviewUiState.Loaded)?.selectedEventId
                         when {
                             event.key == Key.Spacebar -> { viewModel.playPause(); true }
+                            // Shift+左/右 = 逐帧后退/前进（桌面端 Ctrl+左/右 等价的帧级步进）
+                            event.isShiftPressed && event.key == Key.DirectionLeft -> { viewModel.frameStepBack(); true }
+                            event.isShiftPressed && event.key == Key.DirectionRight -> { viewModel.frameStepForward(); true }
                             event.key == Key.DirectionLeft -> { viewModel.seekRelative(-5_000); true }
                             event.key == Key.DirectionRight -> { viewModel.seekRelative(5_000); true }
                             event.isCtrlPressed && event.key == Key.Z -> { viewModel.undo(); true }
@@ -183,6 +188,7 @@ private fun VideoBlock(
     onPickVideo: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showSpectrogram by remember { mutableStateOf(false) }
     Column(modifier) {
         Box(
             modifier = Modifier
@@ -205,19 +211,39 @@ private fun VideoBlock(
             onPlayPause = viewModel::playPause,
             onSeek = viewModel::seekTo,
             onSpeedChange = viewModel::setSpeed,
+            onFrameBack = viewModel::frameStepBack,
+            onFrameForward = viewModel::frameStepForward,
         )
+        // 音频可视化切换：波形 / 频谱
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = { showSpectrogram = !showSpectrogram }) {
+                Text(if (showSpectrogram) "切到波形" else "切到频谱")
+            }
+        }
         val waveform by viewModel.waveform.collectAsStateWithLifecycle()
-        AudioTimeline(
-            waveform = waveform,
-            events = state.script.events,
-            selectedEventId = state.selectedEventId,
-            positionMs = state.playback.positionMs,
-            durationMs = state.playback.durationMs,
-            onCommitDrag = { id, startMs, endMs ->
-                viewModel.editEventTimes(id, SubTime.ofMillis(startMs), SubTime.ofMillis(endMs))
-                viewModel.selectEvent(id)
-            },
-        )
+        val spectrogram by viewModel.spectrogram.collectAsStateWithLifecycle()
+        if (showSpectrogram) {
+            SpectrogramView(
+                data = spectrogram,
+                positionMs = state.playback.positionMs,
+                durationMs = state.playback.durationMs,
+            )
+        } else {
+            AudioTimeline(
+                waveform = waveform,
+                events = state.script.events,
+                selectedEventId = state.selectedEventId,
+                positionMs = state.playback.positionMs,
+                durationMs = state.playback.durationMs,
+                onCommitDrag = { id, startMs, endMs ->
+                    viewModel.editEventTimes(id, SubTime.ofMillis(startMs), SubTime.ofMillis(endMs))
+                    viewModel.selectEvent(id)
+                },
+            )
+        }
     }
 }
 
@@ -237,6 +263,8 @@ private fun PlaybackControls(
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
     onSpeedChange: (Float) -> Unit,
+    onFrameBack: () -> Unit,
+    onFrameForward: () -> Unit,
 ) {
     val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
     var speedExpanded by remember { mutableStateOf(false) }
@@ -247,6 +275,13 @@ private fun PlaybackControls(
                     if (playback.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                     contentDescription = "播放/暂停",
                 )
+            }
+            // 逐帧：后退 / 前进（仅挂载视频后有意义）
+            IconButton(onClick = onFrameBack, enabled = playback.isReady) {
+                Text("◀▏", style = MaterialTheme.typography.titleSmall)
+            }
+            IconButton(onClick = onFrameForward, enabled = playback.isReady) {
+                Text("▕▶", style = MaterialTheme.typography.titleSmall)
             }
             Text(formatTime(playback.positionMs), style = MaterialTheme.typography.bodySmall)
             Box {
@@ -261,6 +296,14 @@ private fun PlaybackControls(
                 }
             }
             Text(" / ${formatTime(playback.durationMs)}", style = MaterialTheme.typography.bodySmall)
+            // 帧率显示（未知则不显示数值）
+            if (playback.fps > 0f) {
+                Text(
+                    "  ${"%.2f".format(playback.fps)}fps",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
         }
         val ratio = if (playback.durationMs > 0) {
             (playback.positionMs.toFloat() / playback.durationMs).coerceIn(0f, 1f)
