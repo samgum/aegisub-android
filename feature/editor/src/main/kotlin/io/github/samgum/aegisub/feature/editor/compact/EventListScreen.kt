@@ -1,6 +1,7 @@
 package io.github.samgum.aegisub.feature.editor.compact
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -36,6 +37,7 @@ fun EventListScreen(
     onEventClick: (AssEvent) -> Unit,
     onBack: () -> Unit,
     title: String = "字幕列表",
+    actions: @Composable RowScope.() -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -46,6 +48,7 @@ fun EventListScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
+                actions = actions,
             )
         },
     ) { padding ->
