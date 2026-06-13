@@ -116,6 +116,20 @@ internal class ProjectSessionImpl(
         commit(current.withStyles(newStyles))
     }
 
+    override fun restoreFromContent(content: String) {
+        val s = stack ?: return
+        try {
+            val parsed = FormatRegistry.detect(content)?.read(content) ?: AssScript.default()
+            val withIds = parsed.withEvents(parsed.events.mapIndexed { i, e -> e.copy(id = i.toLong()) })
+            // 作为新撤销点提交（复用 commit 路径，触发防抖回写）
+            s.commit(withIds, "restore")
+            _script.value = s.current
+            syncFlags()
+        } catch (e: Exception) {
+            // 解析失败：忽略，保持当前脚本不变
+        }
+    }
+
     private fun commit(newScript: AssScript) {
         val s = stack ?: return
         s.commit(newScript, "edit")

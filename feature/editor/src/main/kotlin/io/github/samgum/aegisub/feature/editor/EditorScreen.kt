@@ -83,6 +83,7 @@ fun EditorScreen(
     val canUndo by viewModel.canUndo.collectAsStateWithLifecycle()
     val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
     val layoutMode by viewModel.layoutMode.collectAsStateWithLifecycle()
+    val snapshots by viewModel.snapshotList.collectAsStateWithLifecycle()
     var editingId by remember { mutableStateOf<Long?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -99,6 +100,7 @@ fun EditorScreen(
     var showShiftTimes by remember { mutableStateOf(false) }
     var showDeleteEmpty by remember { mutableStateOf(false) }
     var showStyleReplace by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
 
     when (val s = state) {
         EditorUiState.Loading ->
@@ -177,6 +179,7 @@ fun EditorScreen(
             onDeleteEmpty = { showToolbox = false; showDeleteEmpty = true },
             onStyleReplace = { showToolbox = false; showStyleReplace = true },
             onOpenStyleManager = { showToolbox = false; onOpenStyles(viewModel.projectId) },
+            onOpenHistory = { showToolbox = false; showHistory = true },
         )
     }
 
@@ -225,6 +228,21 @@ fun EditorScreen(
                 viewModel.replaceStyles(from, to)
                 showStyleReplace = false
             },
+        )
+    }
+
+    if (showHistory) {
+        HistorySheet(
+            snapshots = snapshots,
+            onDismiss = { showHistory = false },
+            onSaveSnapshot = { label ->
+                viewModel.takeSnapshot(label)
+            },
+            onRestore = { id ->
+                viewModel.restoreSnapshot(id)
+                showHistory = false
+            },
+            onDelete = { id -> viewModel.deleteSnapshot(id) },
         )
     }
 }
@@ -335,6 +353,7 @@ private fun ToolboxSheet(
     onDeleteEmpty: () -> Unit,
     onStyleReplace: () -> Unit,
     onOpenStyleManager: () -> Unit,
+    onOpenHistory: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
@@ -358,6 +377,9 @@ private fun ToolboxSheet(
             }
             item {
                 ToolEntry(Icons.Filled.Build, "样式管理器", "编辑颜色 / 字体 / 描边 / 对齐 / 边距 / 编码") { onOpenStyleManager() }
+            }
+            item {
+                ToolEntry(Icons.Filled.PlayArrow, "历史版本", "保存当前为快照 / 恢复到过往版本（可撤销）") { onOpenHistory() }
             }
             item { HorizontalDivider() }
         }
@@ -483,4 +505,71 @@ private fun StyleDropdown(label: String, options: List<String>, selected: String
             }
         }
     }
+}
+
+/**
+ * 历史版本弹层：保存当前为快照 + 列出过往快照（恢复/删除）。
+ * 恢复会把快照内容作为新撤销点载入，可撤销回恢复前。
+ *
+ * @author 伤感咩吖
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HistorySheet(
+    snapshots: List<io.github.samgum.aegisub.data.repository.Snapshot>,
+    onDismiss: () -> Unit,
+    onSaveSnapshot: (label: String) -> Unit,
+    onRestore: (id: Long) -> Unit,
+    onDelete: (id: Long) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var label by remember { mutableStateOf("手动快照") }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("历史版本", style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = label,
+                    onValueChange = { label = it },
+                    label = { Text("快照备注") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { onSaveSnapshot(label.ifBlank { "手动快照" }) }) { Text("保存当前") }
+            }
+            HorizontalDivider()
+            if (snapshots.isEmpty()) {
+                Text("暂无快照。保存当前脚本为快照后，可随时恢复到该版本。", style = MaterialTheme.typography.bodySmall)
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                    items(snapshots.size) { i ->
+                        val s = snapshots[i]
+                        ListItem(
+                            headlineContent = { Text(s.label.ifBlank { "（无备注）" }) },
+                            supportingContent = { Text(formatTimestamp(s.createdAt), style = MaterialTheme.typography.bodySmall) },
+                            trailingContent = {
+                                Row {
+                                    TextButton(onClick = { onRestore(s.id) }) { Text("恢复") }
+                                    TextButton(onClick = { onDelete(s.id) }) { Text("删除") }
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** epoch 毫秒 → "yyyy-MM-dd HH:mm"。 */
+private fun formatTimestamp(ms: Long): String {
+    if (ms <= 0L) return "—"
+    val cal = java.util.Calendar.getInstance().apply { timeInMillis = ms }
+    return "%04d-%02d-%02d %02d:%02d".format(
+        cal.get(java.util.Calendar.YEAR),
+        cal.get(java.util.Calendar.MONTH) + 1,
+        cal.get(java.util.Calendar.DAY_OF_MONTH),
+        cal.get(java.util.Calendar.HOUR_OF_DAY),
+        cal.get(java.util.Calendar.MINUTE),
+    )
 }

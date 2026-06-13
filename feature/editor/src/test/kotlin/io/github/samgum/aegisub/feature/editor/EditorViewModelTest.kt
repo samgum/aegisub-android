@@ -3,6 +3,8 @@ package io.github.samgum.aegisub.feature.editor
 import androidx.lifecycle.SavedStateHandle
 import io.github.samgum.aegisub.data.repository.Project
 import io.github.samgum.aegisub.data.repository.ProjectRepository
+import io.github.samgum.aegisub.data.repository.Snapshot
+import io.github.samgum.aegisub.data.repository.SnapshotRepository
 import io.github.samgum.aegisub.data.session.ProjectSessionManager
 import io.github.samgum.aegisub.data.settings.LayoutMode
 import io.github.samgum.aegisub.data.settings.SettingsRepository
@@ -43,6 +45,7 @@ class EditorViewModelTest {
         EditorViewModel(
             ProjectSessionManager(FakeProjectRepository(content)),
             FakeSettingsRepository(precision),
+            FakeSnapshotRepository(),
             SavedStateHandle(mapOf("projectId" to "42")),
         )
 
@@ -63,7 +66,7 @@ class EditorViewModelTest {
     }
 
     @Test fun error_state_when_repo_throws() = runTest(dispatcher) {
-        val v = EditorViewModel(ProjectSessionManager(ThrowingRepo()), FakeSettingsRepository(), SavedStateHandle(mapOf("projectId" to "1")))
+        val v = EditorViewModel(ProjectSessionManager(ThrowingRepo()), FakeSettingsRepository(), FakeSnapshotRepository(), SavedStateHandle(mapOf("projectId" to "1")))
         advanceUntilIdle()
         assertTrue(v.state.value is EditorUiState.Error)
     }
@@ -133,14 +136,14 @@ class EditorViewModelTest {
 
     @Test fun first_version_is_not_saved() = runTest(dispatcher) {
         val repo = FakeProjectRepository(ASS_SAMPLE)
-        EditorViewModel(ProjectSessionManager(repo), FakeSettingsRepository(), SavedStateHandle(mapOf("projectId" to "42")))
+        EditorViewModel(ProjectSessionManager(repo), FakeSettingsRepository(), FakeSnapshotRepository(), SavedStateHandle(mapOf("projectId" to "42")))
         advanceUntilIdle()
         assertEquals("加载首版本不应触发保存", 0, repo.savedContents.size)
     }
 
     @Test fun edits_are_debounced_then_saved() = runTest(dispatcher) {
         val repo = FakeProjectRepository(ASS_SAMPLE)
-        val v = EditorViewModel(ProjectSessionManager(repo), FakeSettingsRepository(), SavedStateHandle(mapOf("projectId" to "42")))
+        val v = EditorViewModel(ProjectSessionManager(repo), FakeSettingsRepository(), FakeSnapshotRepository(), SavedStateHandle(mapOf("projectId" to "42")))
         advanceUntilIdle()
         val id = v.currentScript()!!.events.first().id
         v.updateEventText(id, "Changed")
@@ -172,10 +175,43 @@ class EditorViewModelTest {
 
     @Test fun export_empty_when_load_failed() = runTest(dispatcher) {
         // 加载失败时 script 维持 null，导出空串而非抛异常
-        val v = EditorViewModel(ProjectSessionManager(ThrowingRepo()), FakeSettingsRepository(), SavedStateHandle(mapOf("projectId" to "1")))
+        val v = EditorViewModel(ProjectSessionManager(ThrowingRepo()), FakeSettingsRepository(), FakeSnapshotRepository(), SavedStateHandle(mapOf("projectId" to "1")))
         advanceUntilIdle()
         assertTrue(v.state.value is EditorUiState.Error)
         assertEquals("", v.exportContent())
+    }
+
+    // ---------- 历史版本恢复 ----------
+
+    @Test fun take_snapshot_persists_content() = runTest(dispatcher) {
+        val snapshotRepo = FakeSnapshotRepository()
+        val v = EditorViewModel(ProjectSessionManager(FakeProjectRepository(ASS_SAMPLE)), FakeSettingsRepository(), snapshotRepo, SavedStateHandle(mapOf("projectId" to "42")))
+        advanceUntilIdle()
+        v.takeSnapshot("第一版")
+        advanceUntilIdle()
+        assertEquals(1, snapshotRepo.all.size)
+        assertEquals("第一版", snapshotRepo.all.first().label)
+        assertEquals(42L, snapshotRepo.all.first().projectId)
+    }
+
+    @Test fun restore_snapshot_replaces_content_undoable() = runTest(dispatcher) {
+        val snapshotRepo = FakeSnapshotRepository()
+        val v = EditorViewModel(ProjectSessionManager(FakeProjectRepository(ASS_SAMPLE)), FakeSettingsRepository(), snapshotRepo, SavedStateHandle(mapOf("projectId" to "42")))
+        advanceUntilIdle()
+        val original = v.currentScript()!!.events.first().text
+        // 改文本 → 存快照 → 再改 → 恢复快照
+        val id = v.currentScript()!!.events.first().id
+        v.updateEventText(id, "Changed")
+        v.takeSnapshot("改后")
+        advanceUntilIdle()
+        val snapId = snapshotRepo.all.first().id
+        v.updateEventText(id, "Again")
+        v.restoreSnapshot(snapId)
+        advanceUntilIdle()
+        assertEquals("Changed", v.currentScript()!!.events.first().text)
+        // 恢复是撤销点，可撤销回 "Again"
+        v.undo()
+        assertEquals("Again", v.currentScript()!!.events.first().text)
     }
 
     private class FakeProjectRepository(private val content: String?) : ProjectRepository {
@@ -203,6 +239,25 @@ class EditorViewModelTest {
         override suspend fun touchLastOpened(id: Long, now: Long) {}
         override suspend fun getMediaUri(id: Long): String? = null
         override suspend fun setMediaUri(id: Long, mediaUri: String) {}
+    }
+
+    /** 内存版假快照仓储：记录全部快照，content 由 id 取回。 */
+    private class FakeSnapshotRepository : SnapshotRepository {
+        private var seq = 0L
+        val all = mutableListOf<Snapshot>()
+        private val contents = mutableMapOf<Long, String>()
+        override fun observeSnapshots(projectId: Long) = kotlinx.coroutines.flow.flowOf(all.filter { it.projectId == projectId })
+        override suspend fun saveSnapshot(projectId: Long, content: String, label: String, now: Long): Long {
+            val id = ++seq
+            contents[id] = content
+            all.add(0, Snapshot(id, projectId, label, now))
+            return id
+        }
+        override suspend fun getSnapshotContent(snapshotId: Long): String? = contents[snapshotId]
+        override suspend fun deleteSnapshot(snapshotId: Long) {
+            all.removeAll { it.id == snapshotId }
+            contents.remove(snapshotId)
+        }
     }
 
     /** 固定返回指定导出精度的假设置仓储（其余取默认）。 */

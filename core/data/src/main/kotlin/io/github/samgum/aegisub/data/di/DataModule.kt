@@ -11,9 +11,12 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.github.samgum.aegisub.data.local.ProjectDao
+import io.github.samgum.aegisub.data.local.SnapshotDao
 import io.github.samgum.aegisub.data.local.SubtitleDatabase
 import io.github.samgum.aegisub.data.repository.ProjectRepository
 import io.github.samgum.aegisub.data.repository.RoomProjectRepository
+import io.github.samgum.aegisub.data.repository.RoomSnapshotRepository
+import io.github.samgum.aegisub.data.repository.SnapshotRepository
 import io.github.samgum.aegisub.data.settings.DataStoreSettingsRepository
 import io.github.samgum.aegisub.data.settings.SettingsRepository
 import javax.inject.Singleton
@@ -34,15 +37,22 @@ object DataModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): SubtitleDatabase =
         Room.databaseBuilder(context, SubtitleDatabase::class.java, "subtitle.db")
-            .addMigrations(SubtitleDatabase.MIGRATION_1_2)
+            .addMigrations(SubtitleDatabase.MIGRATION_1_2, SubtitleDatabase.MIGRATION_2_3)
             .build()
 
     @Provides
     fun provideProjectDao(database: SubtitleDatabase): ProjectDao = database.projectDao()
 
     @Provides
+    fun provideSnapshotDao(database: SubtitleDatabase): SnapshotDao = database.snapshotDao()
+
+    @Provides
     @Singleton
     fun provideProjectRepository(dao: ProjectDao): ProjectRepository = RoomProjectRepository(dao)
+
+    @Provides
+    @Singleton
+    fun provideSnapshotRepository(dao: SnapshotDao): SnapshotRepository = RoomSnapshotRepository(dao)
 
     @Provides
     @Singleton

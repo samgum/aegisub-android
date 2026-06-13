@@ -4,6 +4,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import io.github.samgum.aegisub.data.repository.Snapshot
+import io.github.samgum.aegisub.data.repository.SnapshotRepository
 import io.github.samgum.aegisub.data.session.ProjectSessionManager
 import io.github.samgum.aegisub.data.settings.LayoutMode
 import io.github.samgum.aegisub.data.settings.SettingsRepository
@@ -22,6 +24,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -35,12 +38,17 @@ import javax.inject.Inject
 class EditorViewModel @Inject constructor(
     manager: ProjectSessionManager,
     private val settings: SettingsRepository,
+    private val snapshots: SnapshotRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     val projectId: Long = savedStateHandle.get<String>("projectId")!!.toLong()
 
     private val session = manager.open(projectId)
+
+    /** 历史快照列表（按时间倒序），用于「历史版本恢复」。 */
+    val snapshotList: StateFlow<List<Snapshot>> = snapshots.observeSnapshots(projectId)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val state: StateFlow<EditorUiState> =
         combine(session.script, session.errorMessage) { script, error ->
@@ -104,6 +112,29 @@ class EditorViewModel @Inject constructor(
 
     fun undo() = session.undo()
     fun redo() = session.redo()
+
+    // ---------- 历史版本恢复 ----------
+
+    /** 把当前脚本存为一条历史快照（手动标签）。 */
+    fun takeSnapshot(label: String) {
+        viewModelScope.launch {
+            val content = session.script.value?.let { AssFormat.write(it) } ?: return@launch
+            snapshots.saveSnapshot(projectId, content, label, System.currentTimeMillis())
+        }
+    }
+
+    /** 恢复某条快照：取其内容，作为新撤销点载入（可撤销）。 */
+    fun restoreSnapshot(snapshotId: Long) {
+        viewModelScope.launch {
+            val content = snapshots.getSnapshotContent(snapshotId) ?: return@launch
+            session.restoreFromContent(content)
+        }
+    }
+
+    /** 删除某条历史快照。 */
+    fun deleteSnapshot(snapshotId: Long) {
+        viewModelScope.launch { snapshots.deleteSnapshot(snapshotId) }
+    }
 
     /**
      * 导出当前脚本为 ASS 文本。读取用户设置的导出精度（厘秒/毫秒/自动），

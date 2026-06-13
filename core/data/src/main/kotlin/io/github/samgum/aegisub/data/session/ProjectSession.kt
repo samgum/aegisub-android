@@ -38,6 +38,12 @@ interface ProjectSession {
     /** 对整个样式列表应用任意变换（增删改），一次提交（一个撤销点，用于样式编辑器）。 */
     fun editStyles(transform: (List<AssStyle>) -> List<AssStyle>)
 
+    /**
+     * 用序列化内容覆盖当前脚本，作为一个新的撤销点入栈（用于「历史版本恢复」）。
+     * 解析失败时忽略。不重置撤销历史——恢复后仍可撤销回恢复前状态。
+     */
+    fun restoreFromContent(content: String)
+
     fun undo()
     fun redo()
 }
