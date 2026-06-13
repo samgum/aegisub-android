@@ -56,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.focusable
@@ -76,6 +77,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.samgum.aegisub.domain.edit.VisualTags
 import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.time.SubTime
+import io.github.samgum.aegisub.feature.preview.R
 import io.github.samgum.aegisub.feature.preview.components.NudgeTarget
 import io.github.samgum.aegisub.feature.preview.components.PlayerSurface
 import io.github.samgum.aegisub.feature.preview.components.SubtitleOverlay
@@ -280,10 +282,10 @@ private fun PreviewTabs(
     modifier: Modifier = Modifier,
 ) {
     val tabs = listOf(
-        PreviewPanel.SUBTITLES to "字幕",
-        PreviewPanel.AUDIO to "音频",
-        PreviewPanel.TIMING to "时间",
-        PreviewPanel.TYPES to "打字",
+        PreviewPanel.SUBTITLES to stringResource(R.string.preview_tab_subtitles),
+        PreviewPanel.AUDIO to stringResource(R.string.preview_tab_audio),
+        PreviewPanel.TIMING to stringResource(R.string.preview_tab_timing),
+        PreviewPanel.TYPES to stringResource(R.string.preview_tab_types),
     )
     Row(
         modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 2.dp),
@@ -355,13 +357,13 @@ private fun PreviewPanelContent(
                 TimingToolbar(state = state, viewModel = viewModel)
                 TimingEditLayer(state = state, viewModel = viewModel)
             } else {
-                Text("选择左侧字幕行进行打轴", modifier = Modifier.padding(16.dp))
+                Text(stringResource(R.string.timing_pick_row), modifier = Modifier.padding(16.dp))
             }
         }
 
         PreviewPanel.TYPES -> Column(modifier.verticalScroll(rememberScrollState()).padding(8.dp)) {
             if (selectedEvent != null && state.hasMedia) {
-                Text("可视化打字", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.types_title), style = MaterialTheme.typography.titleSmall)
                 VisualTypesettingControls(
                     event = selectedEvent,
                     toolMode = vtToolMode,
@@ -382,7 +384,7 @@ private fun PreviewPanelContent(
                     onCommit = { viewModel.setEventText(selectedEvent.id, it) },
                 )
             } else {
-                Text("选择字幕行并挂载视频后使用可视化打字。", modifier = Modifier.padding(16.dp))
+                Text(stringResource(R.string.types_pick_row), modifier = Modifier.padding(16.dp))
             }
         }
     }
@@ -691,7 +693,7 @@ private fun PreviewEventRow(event: AssEvent, isCurrent: Boolean, isSelected: Boo
     ListItem(
         headlineContent = {
             Text(
-                text = event.strippedText.ifBlank { "（无文本）" },
+                text = event.strippedText.ifBlank { stringResource(R.string.subtitle_no_text) },
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 color = if (event.comment) MaterialTheme.colorScheme.outline

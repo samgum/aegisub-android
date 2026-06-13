@@ -1,0 +1,32 @@
+<resources>
+    <string name="preview_tab_subtitles">Subtitles</string>
+    <string name="preview_tab_audio">Audio</string>
+    <string name="preview_tab_timing">Timing</string>
+    <string name="preview_tab_types">Typeset</string>
+
+    <string name="preview_play_pause">Play/Pause</string>
+    <string name="preview_frame_back">Frame back</string>
+    <string name="preview_frame_forward">Frame forward</string>
+    <string name="preview_no_media">No video attached</string>
+    <string name="preview_pick_video">Pick video</string>
+    <string name="preview_waveform">Waveform</string>
+    <string name="preview_spectrogram">Spectrogram</string>
+
+    <string name="timing_pick_row">Select a subtitle line to time it.</string>
+    <string name="timing_set_start">Set start</string>
+    <string name="timing_set_end">Set end</string>
+    <string name="timing_prev_row">Previous line</string>
+    <string name="timing_next_row">Next line</string>
+
+    <string name="types_title">Visual typesetting</string>
+    <string name="types_pick_row">Select a subtitle line and attach a video to use visual typesetting.</string>
+    <string name="types_pos_mode">\\pos</string>
+    <string name="types_move_mode">\\move</string>
+    <string name="types_clear_pos">Clear \\pos</string>
+    <string name="types_clear_move">Clear \\move</string>
+    <string name="types_karaoke">Karaoke timing</string>
+    <string name="types_apply">Apply</string>
+    <string name="types_clear">Clear</string>
+
+    <string name="subtitle_no_text">(no text)</string>
+</resources>
