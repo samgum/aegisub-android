@@ -43,8 +43,6 @@ fun SubtitleOverlay(
     val info = renderInfo
     val style = info.style
     val measurer = rememberTextMeasurer()
-    // remember 仅缓存 measurer；测量必须在 Canvas 里按画布尺寸做（换行依赖可用宽度）
-    remember(info) { /* 触发 info 变化时重组 */ }
 
     Canvas(modifier = modifier.fillMaxSize()) {
         val scaleY = (size.height / info.playResY.coerceAtLeast(1)).toFloat()

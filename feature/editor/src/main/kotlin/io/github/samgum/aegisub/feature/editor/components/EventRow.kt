@@ -36,7 +36,7 @@ fun EventRow(
         headlineContent = {
             Text(
                 text = event.strippedText.ifBlank { "（无文本）" },
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 // 注释行用弱化色，呼应 ASS Comment 语义
                 color = if (event.comment) {

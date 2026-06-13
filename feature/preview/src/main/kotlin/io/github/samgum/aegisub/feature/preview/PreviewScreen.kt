@@ -629,7 +629,7 @@ private fun PreviewEventRow(event: AssEvent, isCurrent: Boolean, isSelected: Boo
         headlineContent = {
             Text(
                 text = event.strippedText.ifBlank { "（无文本）" },
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 color = if (event.comment) MaterialTheme.colorScheme.outline
                 else MaterialTheme.colorScheme.onSurface,
