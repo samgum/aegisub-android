@@ -3,7 +3,9 @@ package io.github.samgum.aegisub.feature.preview
 import androidx.lifecycle.SavedStateHandle
 import io.github.samgum.aegisub.data.repository.Project
 import io.github.samgum.aegisub.data.repository.ProjectRepository
+import io.github.samgum.aegisub.data.session.ProjectSessionManager
 import io.github.samgum.aegisub.domain.preview.SubtitleRenderInfo
+import io.github.samgum.aegisub.domain.time.SubTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -25,7 +27,8 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * PreviewViewModel 单测：加载/空媒体/当前行派生/seekToEvent/attachMedia/错误态。
+ * PreviewViewModel 单测：加载/空媒体/当前行派生/seekToEvent/attachMedia/错误态 +
+ * 可写化（selectEvent/editEventTimes/nudge/undo）。
  *
  * @author 伤感咩吖
  */
@@ -55,11 +58,10 @@ class PreviewViewModelTest {
         content: String? = sampleAss,
         mediaUri: String? = null,
         player: VideoPlayer = FakeVideoPlayer(),
-    ): PreviewViewModel = PreviewViewModel(
-        FakeProjectRepository(content, mediaUri),
-        player,
-        SavedStateHandle(mapOf("projectId" to "42")),
-    )
+    ): PreviewViewModel {
+        val repo = FakeProjectRepository(content, mediaUri)
+        return PreviewViewModel(ProjectSessionManager(repo), repo, player, SavedStateHandle(mapOf("projectId" to "42")))
+    }
 
     @Test fun loads_script_into_loaded_state() = runTest(dispatcher) {
         val v = vm()
@@ -117,7 +119,7 @@ class PreviewViewModelTest {
     @Test fun attach_media_persists_and_sets_player() = runTest(dispatcher) {
         val fake = FakeVideoPlayer()
         val repo = FakeProjectRepository(sampleAss, mediaUri = null)
-        val v = PreviewViewModel(repo, fake, SavedStateHandle(mapOf("projectId" to "42")))
+        val v = PreviewViewModel(ProjectSessionManager(repo), repo, fake, SavedStateHandle(mapOf("projectId" to "42")))
         advanceUntilIdle()
         v.attachMedia("content://video/9")
         advanceUntilIdle()
@@ -127,11 +129,8 @@ class PreviewViewModelTest {
     }
 
     @Test fun error_state_when_repo_throws() = runTest(dispatcher) {
-        val v = PreviewViewModel(
-            FakeProjectRepository(throwOnGetContent = true),
-            FakeVideoPlayer(),
-            SavedStateHandle(mapOf("projectId" to "1")),
-        )
+        val repo = FakeProjectRepository(throwOnGetContent = true)
+        val v = PreviewViewModel(ProjectSessionManager(repo), repo, FakeVideoPlayer(), SavedStateHandle(mapOf("projectId" to "1")))
         advanceUntilIdle()
         assertTrue(v.state.value is PreviewUiState.Error)
     }
@@ -166,10 +165,60 @@ class PreviewViewModelTest {
         job.cancel()
     }
 
+    // ---------- 可写化（Task 5）----------
+
+    @Test fun select_event_seeks_and_marks_selected() = runTest(dispatcher) {
+        val fake = FakeVideoPlayer()
+        val v = vm(player = fake)
+        advanceUntilIdle()
+        v.selectEvent(1L) // 第二句 start=4s
+        advanceUntilIdle()
+        assertEquals(4_000L, fake.seekedTo)
+        assertEquals(1L, (v.state.value as PreviewUiState.Loaded).selectedEventId)
+    }
+
+    @Test fun edit_event_times_writes_session_and_clamps() = runTest(dispatcher) {
+        val fake = FakeVideoPlayer(durationMs = 10_000)
+        val v = vm(player = fake)
+        advanceUntilIdle()
+        // 第二句原 [4s,6s]，把结束拖到 12s → 钳到 10s
+        v.editEventTimes(1L, SubTime.ofMillis(4_000), SubTime.ofMillis(12_000))
+        advanceUntilIdle() // 等 session → state combine 传播
+        val e = (v.state.value as PreviewUiState.Loaded).script.events[1]
+        assertEquals(4_000L, e.start.millis)
+        assertEquals(10_000L, e.end.millis)
+    }
+
+    @Test fun nudge_start_adjusts_and_keeps_end() = runTest(dispatcher) {
+        val fake = FakeVideoPlayer(durationMs = 10_000)
+        val v = vm(player = fake)
+        advanceUntilIdle()
+        v.selectEvent(0L) // 第一句 [1s,3s]
+        advanceUntilIdle()
+        v.nudgeStart(1_000) // 起始 +1s → 2s
+        advanceUntilIdle()
+        val e = (v.state.value as PreviewUiState.Loaded).script.events[0]
+        assertEquals(2_000L, e.start.millis)
+        assertEquals(3_000L, e.end.millis)
+    }
+
+    @Test fun undo_in_preview_restores_timing() = runTest(dispatcher) {
+        val fake = FakeVideoPlayer(durationMs = 10_000)
+        val v = vm(player = fake)
+        advanceUntilIdle()
+        v.editEventTimes(0L, SubTime.ofMillis(2_000), SubTime.ofMillis(4_000))
+        advanceUntilIdle()
+        assertTrue(v.canUndo.value)
+        v.undo()
+        advanceUntilIdle()
+        val e = (v.state.value as PreviewUiState.Loaded).script.events[0]
+        assertEquals("撤销应回到原 1s", 1_000L, e.start.millis)
+    }
+
     // ---------- fakes ----------
 
-    private class FakeVideoPlayer : VideoPlayer {
-        override val state = MutableStateFlow(PlaybackState())
+    private class FakeVideoPlayer(private val durationMs: Long = 0L) : VideoPlayer {
+        override val state = MutableStateFlow(PlaybackState(durationMs = durationMs))
         var seekedTo: Long? = null
         var mediaSet: String? = null
         var released = false

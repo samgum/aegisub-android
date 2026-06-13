@@ -5,10 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.samgum.aegisub.data.repository.ProjectRepository
-import io.github.samgum.aegisub.domain.format.FormatRegistry
+import io.github.samgum.aegisub.data.session.ProjectSessionManager
 import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.domain.preview.ActiveSubtitleResolver
 import io.github.samgum.aegisub.domain.preview.SubtitleRenderInfo
+import io.github.samgum.aegisub.domain.preview.TimingConstraints
+import io.github.samgum.aegisub.domain.time.SubTime
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -31,19 +33,22 @@ sealed interface PreviewUiState {
         val hasMedia: Boolean,
         val playback: PlaybackState,
         val currentEventId: Long?,
+        val selectedEventId: Long?,
     ) : PreviewUiState
     data class Error(val message: String) : PreviewUiState
 }
 
 /**
- * 预览 ViewModel：只读加载脚本 + 挂载媒体 + 派生当前活动行 + seek/媒体控制。
- * 不写脚本，与编辑器的撤销/自动保存完全解耦。
+ * 预览 ViewModel：与编辑器共享 [io.github.samgum.aegisub.data.session.ProjectSession]，
+ * 因此可在预览屏直接编辑选中行的起止时间（editEventTimes/nudge），改动同步回编辑器并防抖落盘。
+ * 媒体挂载仍由本类直管（不进 session）。
  *
  * @author 伤感咩吖
  */
 @HiltViewModel
 @OptIn(ExperimentalCoroutinesApi::class)
 class PreviewViewModel @Inject constructor(
+    manager: ProjectSessionManager,
     private val repo: ProjectRepository,
     private val player: VideoPlayer,
     savedStateHandle: SavedStateHandle,
@@ -51,9 +56,20 @@ class PreviewViewModel @Inject constructor(
 
     val projectId: Long = savedStateHandle.get<String>("projectId")!!.toLong()
 
-    private val base = MutableStateFlow<BaseState>(BaseState.Loading)
+    private val session = manager.open(projectId)
 
-    val state: StateFlow<PreviewUiState> = combine(base, player.state) { b, playback ->
+    private val _hasMedia = MutableStateFlow(false)
+    private val _selectedEventId = MutableStateFlow<Long?>(null)
+
+    private val base = combine(session.script, session.errorMessage, _hasMedia) { script, error, hasMedia ->
+        when {
+            error != null -> BaseState.Error(error)
+            script != null -> BaseState.Ready(script, hasMedia)
+            else -> BaseState.Loading
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, BaseState.Loading)
+
+    val state: StateFlow<PreviewUiState> = combine(base, player.state, _selectedEventId) { b, playback, selected ->
         when (b) {
             BaseState.Loading -> PreviewUiState.Loading
             is BaseState.Error -> PreviewUiState.Error(b.message)
@@ -62,14 +78,11 @@ class PreviewViewModel @Inject constructor(
                 hasMedia = b.hasMedia,
                 playback = playback,
                 currentEventId = ActiveSubtitleResolver.activeEvent(b.script, playback.positionMs)?.id,
+                selectedEventId = selected,
             )
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PreviewUiState.Loading)
 
-    /**
-     * 当前活动字幕渲染信息（distinctUntilChanged：仅活动事件切换时变化）。
-     * 叠加层订阅本流而非 50ms 位置 tick，降低低端机每帧重组开销。
-     */
     val activeSubtitle: StateFlow<SubtitleRenderInfo?> = combine(base, player.state) { b, playback ->
         when (b) {
             is BaseState.Ready -> ActiveSubtitleResolver.renderInfo(b.script, playback.positionMs)
@@ -77,24 +90,22 @@ class PreviewViewModel @Inject constructor(
         }
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    val canUndo: StateFlow<Boolean> = session.canUndo
+    val canRedo: StateFlow<Boolean> = session.canRedo
+
     /** 暴露播放器给 PlayerSurface 绑定（仅预览模块内做安全转型）。 */
     val videoPlayer: VideoPlayer get() = player
 
     init {
-        load()
+        loadMedia()
     }
 
-    private fun load() {
+    private fun loadMedia() {
         viewModelScope.launch {
-            try {
-                val content = repo.getContent(projectId)
-                val parsed = FormatRegistry.detect(content)?.read(content) ?: AssScript.default()
-                val script = parsed.withEvents(parsed.events.mapIndexed { i, e -> e.copy(id = i.toLong()) })
-                val mediaUri = repo.getMediaUri(projectId)
-                if (mediaUri != null) player.setMedia(mediaUri)
-                base.value = BaseState.Ready(script, hasMedia = mediaUri != null)
-            } catch (e: Exception) {
-                base.value = BaseState.Error(e.message ?: "加载失败")
+            val uri = repo.getMediaUri(projectId)
+            if (uri != null) {
+                player.setMedia(uri)
+                _hasMedia.value = true
             }
         }
     }
@@ -111,19 +122,52 @@ class PreviewViewModel @Inject constructor(
         player.setSpeed(rate)
     }
 
+    /** 选中一行：seek 到该行开始 + 标记为编辑目标。 */
+    fun selectEvent(eventId: Long) {
+        val script = session.script.value ?: return
+        val event = script.events.firstOrNull { it.id == eventId } ?: return
+        _selectedEventId.value = eventId
+        player.seekTo(event.start.millis)
+    }
+
+    /** 仅 seek 到事件开始（保留兼容入口；新代码用 [selectEvent]）。 */
     fun seekToEvent(eventId: Long) {
-        val script = (base.value as? BaseState.Ready)?.script ?: return
+        val script = session.script.value ?: return
         val event = script.events.firstOrNull { it.id == eventId } ?: return
         player.seekTo(event.start.millis)
+    }
+
+    /** 把指定行的起止设为给定值（经 TimingConstraints 钳制）。 */
+    fun editEventTimes(eventId: Long, start: SubTime, end: SubTime) {
+        val durationMs = player.state.value.durationMs
+        val (s, e) = TimingConstraints.constrain(start, end, durationMs)
+        session.editEvent(eventId) { it.copy(start = s, end = e) }
+    }
+
+    /** 微调选中行的起始时间 deltaMs 毫秒（负数前移）。 */
+    fun nudgeStart(deltaMs: Long) {
+        val id = _selectedEventId.value ?: return
+        val event = session.script.value?.events?.firstOrNull { it.id == id } ?: return
+        editEventTimes(id, SubTime.ofMillis(event.start.millis + deltaMs), event.end)
+    }
+
+    /** 微调选中行的结束时间 deltaMs 毫秒（负数前移）。 */
+    fun nudgeEnd(deltaMs: Long) {
+        val id = _selectedEventId.value ?: return
+        val event = session.script.value?.events?.firstOrNull { it.id == id } ?: return
+        editEventTimes(id, event.start, SubTime.ofMillis(event.end.millis + deltaMs))
     }
 
     fun attachMedia(uri: String) {
         viewModelScope.launch {
             repo.setMediaUri(projectId, uri)
             player.setMedia(uri)
-            (base.value as? BaseState.Ready)?.let { base.value = it.copy(hasMedia = true) }
+            _hasMedia.value = true
         }
     }
+
+    fun undo() = session.undo()
+    fun redo() = session.redo()
 
     override fun onCleared() {
         player.release()
