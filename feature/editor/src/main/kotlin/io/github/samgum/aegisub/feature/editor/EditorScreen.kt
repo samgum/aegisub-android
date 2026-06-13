@@ -240,10 +240,12 @@ fun EditorScreen(
                         modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 }
-                FloatingActionButton(
-                    onClick = { showToolbox = true },
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-                ) { Icon(Icons.Filled.Build, contentDescription = "批量工具") }
+                if (!selectionMode) {
+                    FloatingActionButton(
+                        onClick = { showToolbox = true },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                    ) { Icon(Icons.Filled.Build, contentDescription = "批量工具") }
+                }
             }
         }
     }
