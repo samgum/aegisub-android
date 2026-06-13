@@ -18,6 +18,7 @@ interface SettingsRepository {
     suspend fun setThemeMode(mode: ThemeMode)
     suspend fun setExportPrecision(precision: TimePrecision)
     suspend fun setLayoutMode(mode: LayoutMode)
+    suspend fun setLangCode(code: String)
 }
 
 /**
@@ -40,6 +41,7 @@ class DataStoreSettingsRepository(
             layoutMode = prefs[KEY_LAYOUT]
                 ?.let { name -> runCatching { LayoutMode.valueOf(name) }.getOrNull() }
                 ?: LayoutMode.AUTO,
+            langCode = prefs[KEY_LANG] ?: "system",
         )
     }
 
@@ -55,9 +57,14 @@ class DataStoreSettingsRepository(
         store.edit { it[KEY_LAYOUT] = mode.name }
     }
 
+    override suspend fun setLangCode(code: String) {
+        store.edit { it[KEY_LANG] = code }
+    }
+
     private companion object {
         val KEY_THEME = stringPreferencesKey("theme_mode")
         val KEY_PRECISION = stringPreferencesKey("export_precision")
         val KEY_LAYOUT = stringPreferencesKey("layout_mode")
+        val KEY_LANG = stringPreferencesKey("lang_code")
     }
 }

@@ -1,3 +1,47 @@
 <resources>
     <string name="app_name">Aegisub</string>
+
+    <!-- 主屏 -->
+    <string name="home_title">Aegisub Android</string>
+    <string name="home_import">导入</string>
+    <string name="home_settings">设置</string>
+    <string name="home_new">新建</string>
+    <string name="home_empty">暂无字幕工程\n点右下角 + 新建，或顶栏导入</string>
+    <string name="home_subtitle_fallback">字幕</string>
+
+    <!-- 设置 -->
+    <string name="settings_title">设置</string>
+    <string name="settings_back">返回</string>
+    <string name="settings_section_theme">主题</string>
+    <string name="settings_theme_system">跟随系统</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_theme_dark">深色</string>
+    <string name="settings_section_precision">导出时间精度</string>
+    <string name="settings_precision_auto">自动（ASS 标准：厘秒）</string>
+    <string name="settings_precision_two">厘秒（H:MM:SS.cc，2 位）</string>
+    <string name="settings_precision_three">毫秒（H:MM:SS.mmm，3 位）</string>
+    <string name="settings_section_layout">编辑器布局</string>
+    <string name="settings_layout_auto">跟随屏宽自动</string>
+    <string name="settings_layout_compact">紧凑（列表 + 底栏）</string>
+    <string name="settings_layout_expanded">双栏（列表 | 详情）</string>
+    <string name="settings_section_language">语言</string>
+    <string name="settings_lang_system">跟随系统</string>
+    <string name="settings_lang_zh">简体中文</string>
+    <string name="settings_lang_en">English</string>
+    <string name="settings_section_about">关于</string>
+    <string name="settings_about">关于本应用</string>
+
+    <!-- 关于 -->
+    <string name="about_title">关于</string>
+    <string name="about_app_name">Aegisub Android</string>
+    <string name="about_tagline">Android 平台上最接近桌面 Aegisub 体验的专业级字幕编辑器</string>
+    <string name="about_author_label">作者 / 维护</string>
+    <string name="about_author_value">伤感咩吖</string>
+    <string name="about_license_label">许可证</string>
+    <string name="about_license_value">Aegisub BSD</string>
+    <string name="about_version_label">版本</string>
+    <string name="about_based_on">参考并部分移植自 Aegisub（跨平台高级字幕编辑器，BSD 许可）</string>
+    <string name="about_github">GitHub 仓库</string>
+    <string name="about_github_url">https://github.com/samgum/aegisub-android</string>
+    <string name="about_open_browser">在浏览器打开</string>
 </resources>

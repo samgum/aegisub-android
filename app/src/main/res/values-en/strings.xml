@@ -1,0 +1,47 @@
+<resources>
+    <string name="app_name">Aegisub</string>
+
+    <!-- Home -->
+    <string name="home_title">Aegisub Android</string>
+    <string name="home_import">Import</string>
+    <string name="home_settings">Settings</string>
+    <string name="home_new">New</string>
+    <string name="home_empty">No subtitle projects yet.\nTap + to create one, or import from the top bar.</string>
+    <string name="home_subtitle_fallback">subtitle</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_back">Back</string>
+    <string name="settings_section_theme">Theme</string>
+    <string name="settings_theme_system">Follow system</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_section_precision">Export time precision</string>
+    <string name="settings_precision_auto">Auto (ASS standard: centiseconds)</string>
+    <string name="settings_precision_two">Centiseconds (H:MM:SS.cc, 2 digits)</string>
+    <string name="settings_precision_three">Milliseconds (H:MM:SS.mmm, 3 digits)</string>
+    <string name="settings_section_layout">Editor layout</string>
+    <string name="settings_layout_auto">Auto by screen width</string>
+    <string name="settings_layout_compact">Compact (list + bottom bar)</string>
+    <string name="settings_layout_expanded">Two-pane (list | details)</string>
+    <string name="settings_section_language">Language</string>
+    <string name="settings_lang_system">Follow system</string>
+    <string name="settings_lang_zh">简体中文</string>
+    <string name="settings_lang_en">English</string>
+    <string name="settings_section_about">About</string>
+    <string name="settings_about">About this app</string>
+
+    <!-- About -->
+    <string name="about_title">About</string>
+    <string name="about_app_name">Aegisub Android</string>
+    <string name="about_tagline">A professional subtitle editor for Android, as close to desktop Aegisub as it gets.</string>
+    <string name="about_author_label">Author / Maintainer</string>
+    <string name="about_author_value">伤感咩吖</string>
+    <string name="about_license_label">License</string>
+    <string name="about_license_value">Aegisub BSD</string>
+    <string name="about_version_label">Version</string>
+    <string name="about_based_on">References and partially ports Aegisub (cross-platform advanced subtitle editor, BSD license).</string>
+    <string name="about_github">GitHub repository</string>
+    <string name="about_github_url">https://github.com/samgum/aegisub-android</string>
+    <string name="about_open_browser">Open in browser</string>
+</resources>

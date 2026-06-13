@@ -17,7 +17,7 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 enum class LayoutMode { AUTO, COMPACT, EXPANDED }
 
 /**
- * 用户设置：主题、ASS 导出时间精度、编辑器布局。后续可继续扩展。
+ * 用户设置：主题、ASS 导出时间精度、编辑器布局、界面语言。后续可继续扩展。
  *
  * @author 伤感咩吖
  */
@@ -25,4 +25,6 @@ data class UserSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val exportPrecision: TimePrecision = TimePrecision.AUTO,
     val layoutMode: LayoutMode = LayoutMode.AUTO,
+    /** 界面语言：system = 跟随系统；zh = 简体中文；en = English。 */
+    val langCode: String = "system",
 )

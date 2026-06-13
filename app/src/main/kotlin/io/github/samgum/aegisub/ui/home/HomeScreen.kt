@@ -30,10 +30,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.samgum.aegisub.R
 import io.github.samgum.aegisub.data.repository.Project
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -70,13 +72,13 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Aegisub Android") },
+                title = { Text(stringResource(R.string.home_title)) },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "设置")
+                        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.home_settings))
                     }
                     TextButton(onClick = { importLauncher.launch(arrayOf("*/*")) }) {
-                        Text("导入")
+                        Text(stringResource(R.string.home_import))
                     }
                 },
             )
@@ -95,7 +97,7 @@ fun HomeScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "暂无字幕工程\n点右下角 + 新建，或顶栏导入",
+                    stringResource(R.string.home_empty),
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
                 )
@@ -119,7 +121,7 @@ private suspend fun readSubtitleFile(context: Context, uri: Uri): Pair<String, S
         val name = context.contentResolver
             .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
             ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
-            ?: (uri.lastPathSegment ?: "字幕")
+            ?: (uri.lastPathSegment ?: context.getString(R.string.home_subtitle_fallback))
         val content = context.contentResolver.openInputStream(uri)?.use { stream ->
             stream.bufferedReader().readText()
         } ?: ""

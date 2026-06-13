@@ -417,6 +417,7 @@ class EditorViewModelTest {
         override suspend fun setThemeMode(mode: ThemeMode) {}
         override suspend fun setExportPrecision(p: TimePrecision) {}
         override suspend fun setLayoutMode(mode: LayoutMode) {}
+        override suspend fun setLangCode(code: String) {}
     }
 }
 
