@@ -171,6 +171,10 @@ private fun VideoBlock(
             selectedEventId = state.selectedEventId,
             positionMs = state.playback.positionMs,
             durationMs = state.playback.durationMs,
+            onCommitDrag = { id, startMs, endMs ->
+                viewModel.editEventTimes(id, SubTime.ofMillis(startMs), SubTime.ofMillis(endMs))
+                viewModel.selectEvent(id)
+            },
         )
     }
 }
