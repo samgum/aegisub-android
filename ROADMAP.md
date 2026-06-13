@@ -2,7 +2,7 @@
 
 > 滚动更新。每完成一个 Phase 提交 Commit 并更新本文件与 README。
 
-## 当前状态：✅ Phase 0 完成 — 核心域模块 `:core:domain`（77 单测全绿）。下一步 Phase 1（数据层 + 应用外壳）。
+## 当前状态：✅ Phase 0 完成 + Phase 1 核心完成（应用外壳 + Room + Hilt + 项目列表 UI，可出 debug APK）。剩余 Phase 1：DataStore 设置 / 自动保存；下一步 Phase 2（字幕编辑 UI）。
 
 ---
 
@@ -19,12 +19,14 @@
 
 **验收**：`:core:domain` 纯 JVM 测试全绿（`./gradlew :core:domain:test` → BUILD SUCCESSFUL，77 passed）。
 
-## Phase 1 · 数据层与应用外壳
-- [ ] 多模块 Gradle 脚手架（`:app` `:core:data` `:core:domain`）
-- [ ] Room：项目 / 历史版本 / 自动保存实体与 DAO
-- [ ] DataStore：用户偏好（默认精度、布局、主题）
-- [ ] Hilt DI 接线 + 应用入口
-- [ ] 自动保存调度（Coroutines + WorkManager）
+## Phase 1 · 数据层与应用外壳（核心完成，可演示）
+- [x] 多模块 Gradle 脚手架（`:app` `:core:data` `:core:domain`，AGP 8.7.3 + Kotlin 2.1.0 + compileSdk 35）
+- [x] Room：项目实体 / DAO / Database + `RoomProjectRepository`（含假 DAO 单测）
+- [x] Hilt DI 接线 + 应用入口（`@HiltAndroidApp` + `DataModule`）
+- [x] 项目列表 UI（LazyColumn + 新建 FAB，`assembleDebug` 出 9.7M APK）
+- [ ] DataStore：用户偏好（默认精度、布局、主题）— 待办
+- [ ] 自动保存调度（Coroutines + WorkManager）— 待办
+- [ ] 历史版本表 — 待办（Phase 7 深化）
 
 ## Phase 2 · 字幕编辑 UI
 - [ ] Compose 字幕列表（`LazyColumn` 虚拟列表，目标 10 万行流畅）
