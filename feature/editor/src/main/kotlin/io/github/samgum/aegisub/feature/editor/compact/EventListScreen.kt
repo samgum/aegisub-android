@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -72,8 +72,8 @@ fun EventListScreen(
                     .padding(padding),
             ) {
                 // key 用稳定唯一 id（EditorViewModel.load 已按行序分配）
-                items(events, key = { it.id }) { event ->
-                    EventRow(event = event, onClick = { onEventClick(event) })
+                itemsIndexed(events, key = { _, it -> it.id }) { index, event ->
+                    EventRow(event = event, index = index, onClick = { onEventClick(event) })
                 }
             }
         }

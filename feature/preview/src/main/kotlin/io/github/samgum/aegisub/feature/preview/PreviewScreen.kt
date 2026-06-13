@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -92,6 +93,9 @@ fun PreviewScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { pickVideo.launch(arrayOf("video/*")) }) {
+                        Icon(Icons.Filled.Movie, contentDescription = "更换视频")
+                    }
                     IconButton(onClick = viewModel::undo, enabled = canUndo) {
                         Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "撤销")
                     }

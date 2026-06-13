@@ -10,12 +10,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import io.github.samgum.aegisub.domain.model.AssEvent
 
 /**
- * 单条字幕事件行：时间区间 + 样式 + 去标签纯文本。
+ * 单条字幕事件行：行号 + 时间区间 + 样式 + 去标签纯文本。
  *
  * @author 伤感咩吖
  */
 @Composable
-fun EventRow(event: AssEvent, onClick: () -> Unit) {
+fun EventRow(event: AssEvent, index: Int, onClick: () -> Unit) {
     ListItem(
         headlineContent = {
             Text(
@@ -39,9 +39,9 @@ fun EventRow(event: AssEvent, onClick: () -> Unit) {
             )
         },
         leadingContent = {
-            // 注释行标记 //（ASS Comment），正常行显示图层号
+            // 行号（从 1 起，对齐 Aegisub 桌面版字幕列表）；注释行同样显示行号，靠 headline 弱化色区分
             Text(
-                text = if (event.comment) "//" else "L${event.layer}",
+                text = "${index + 1}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline,
             )

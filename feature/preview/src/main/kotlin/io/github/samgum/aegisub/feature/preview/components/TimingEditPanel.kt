@@ -85,7 +85,7 @@ private fun StartSlider(
     onCommit: (Long) -> Unit,
     onSelect: () -> Unit,
 ) {
-    var dragging by remember { mutableStateOf(valueMs.toFloat()) }
+    var dragging by remember(valueMs) { mutableStateOf(valueMs.toFloat()) }
     Column {
         Text("起 ${formatMs(valueMs)}", style = MaterialTheme.typography.labelSmall)
         val max = durationMs.coerceAtLeast(1)
@@ -110,7 +110,7 @@ private fun EndSlider(
     onCommit: (Long) -> Unit,
     onSelect: () -> Unit,
 ) {
-    var dragging by remember { mutableStateOf(valueMs.toFloat()) }
+    var dragging by remember(valueMs) { mutableStateOf(valueMs.toFloat()) }
     Column {
         Text("止 ${formatMs(valueMs)}", style = MaterialTheme.typography.labelSmall)
         val max = durationMs.coerceAtLeast(1)

@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
@@ -73,8 +73,8 @@ fun EditorTwoPane(
         Row(modifier = Modifier.fillMaxSize().padding(padding)) {
             // 左：字幕列表
             LazyColumn(modifier = Modifier.weight(0.4f)) {
-                items(script.events, key = { it.id }) { ev ->
-                    EventRow(event = ev, onClick = { onEventClick(ev) })
+                itemsIndexed(script.events, key = { _, it -> it.id }) { index, ev ->
+                    EventRow(event = ev, index = index, onClick = { onEventClick(ev) })
                 }
             }
             // 右：选中事件详情常驻
