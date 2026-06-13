@@ -3,6 +3,7 @@ package io.github.samgum.aegisub.feature.editor
 import androidx.lifecycle.SavedStateHandle
 import io.github.samgum.aegisub.data.repository.Project
 import io.github.samgum.aegisub.data.repository.ProjectRepository
+import io.github.samgum.aegisub.data.session.ProjectSessionManager
 import io.github.samgum.aegisub.domain.time.SubTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -34,7 +35,7 @@ class EditorViewModelTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     private fun vm(content: String?): EditorViewModel =
-        EditorViewModel(FakeProjectRepository(content), SavedStateHandle(mapOf("projectId" to "42")))
+        EditorViewModel(ProjectSessionManager(FakeProjectRepository(content)), SavedStateHandle(mapOf("projectId" to "42")))
 
     @Test fun loads_ass_script_from_content() = runTest(dispatcher) {
         val v = vm(ASS_SAMPLE)
@@ -53,7 +54,7 @@ class EditorViewModelTest {
     }
 
     @Test fun error_state_when_repo_throws() = runTest(dispatcher) {
-        val v = EditorViewModel(ThrowingRepo(), SavedStateHandle(mapOf("projectId" to "1")))
+        val v = EditorViewModel(ProjectSessionManager(ThrowingRepo()), SavedStateHandle(mapOf("projectId" to "1")))
         advanceUntilIdle()
         assertTrue(v.state.value is EditorUiState.Error)
     }
@@ -123,14 +124,14 @@ class EditorViewModelTest {
 
     @Test fun first_version_is_not_saved() = runTest(dispatcher) {
         val repo = FakeProjectRepository(ASS_SAMPLE)
-        EditorViewModel(repo, SavedStateHandle(mapOf("projectId" to "42")))
+        EditorViewModel(ProjectSessionManager(repo), SavedStateHandle(mapOf("projectId" to "42")))
         advanceUntilIdle()
         assertEquals("加载首版本不应触发保存", 0, repo.savedContents.size)
     }
 
     @Test fun edits_are_debounced_then_saved() = runTest(dispatcher) {
         val repo = FakeProjectRepository(ASS_SAMPLE)
-        val v = EditorViewModel(repo, SavedStateHandle(mapOf("projectId" to "42")))
+        val v = EditorViewModel(ProjectSessionManager(repo), SavedStateHandle(mapOf("projectId" to "42")))
         advanceUntilIdle()
         val id = v.currentScript()!!.events.first().id
         v.updateEventText(id, "Changed")
