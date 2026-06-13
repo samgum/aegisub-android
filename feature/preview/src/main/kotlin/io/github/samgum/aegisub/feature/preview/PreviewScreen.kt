@@ -60,7 +60,9 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlin.math.roundToInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.samgum.aegisub.domain.edit.VisualTags
 import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.time.SubTime
 import io.github.samgum.aegisub.feature.preview.components.NudgeTarget
@@ -69,6 +71,7 @@ import io.github.samgum.aegisub.feature.preview.components.SubtitleOverlay
 import io.github.samgum.aegisub.feature.preview.components.AudioTimeline
 import io.github.samgum.aegisub.feature.preview.components.SpectrogramView
 import io.github.samgum.aegisub.feature.preview.components.TimingEditPanel
+import io.github.samgum.aegisub.feature.preview.components.VisualTypesettingOverlay
 
 /**
  * 预览屏入口：加载→分发（Loading/Error/Loaded）→ compact/expanded。
@@ -189,6 +192,10 @@ private fun VideoBlock(
     modifier: Modifier = Modifier,
 ) {
     var showSpectrogram by remember { mutableStateOf(false) }
+    var vtMode by remember { mutableStateOf(false) }
+    val selectedEvent = state.script.events.firstOrNull { it.id == state.selectedEventId }
+    val playResX = state.script.getScriptInfo("PlayResX")?.toIntOrNull() ?: 384
+    val playResY = state.script.getScriptInfo("PlayResY")?.toIntOrNull() ?: 288
     Column(modifier) {
         Box(
             modifier = Modifier
@@ -199,11 +206,29 @@ private fun VideoBlock(
         ) {
             PlayerSurface(player = viewModel.videoPlayer, modifier = Modifier.fillMaxSize())
             ActiveSubtitleLayer(viewModel = viewModel)
+            // 可视化打字：选中行 + 挂载视频时，在画面上拖拽设 {\pos}
+            if (vtMode && state.hasMedia && selectedEvent != null) {
+                VisualTypesettingOverlay(
+                    playResX = playResX,
+                    playResY = playResY,
+                    currentPos = VisualTags.getPos(selectedEvent.text),
+                    onPosChange = { x, y -> viewModel.setEventPos(selectedEvent.id, x, y) },
+                )
+            }
             if (!state.hasMedia) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("未挂载视频", color = Color.White)
                     Button(onClick = onPickVideo) { Text("选择视频") }
                 }
+            }
+            // 可视化打字模式徽标
+            if (vtMode) {
+                Text(
+                    "可视化打字：拖拽画面设 \\pos",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.align(Alignment.TopStart).padding(4.dp),
+                )
             }
         }
         PlaybackControls(
@@ -214,13 +239,24 @@ private fun VideoBlock(
             onFrameBack = viewModel::frameStepBack,
             onFrameForward = viewModel::frameStepForward,
         )
-        // 音频可视化切换：波形 / 频谱
+        // 可视化打字控件：旋转 {\fr} 滑块 + 清除 \pos
+        if (vtMode && selectedEvent != null) {
+            VisualTypesettingControls(
+                event = selectedEvent,
+                onRotationChange = { deg -> viewModel.setEventRotation(selectedEvent.id, deg) },
+                onClearPos = { viewModel.clearEventPos(selectedEvent.id) },
+            )
+        }
+        // 音频可视化切换：波形 / 频谱 + 可视化打字开关
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(onClick = { showSpectrogram = !showSpectrogram }) {
                 Text(if (showSpectrogram) "切到波形" else "切到频谱")
+            }
+            TextButton(onClick = { vtMode = !vtMode }) {
+                Text(if (vtMode) "退出可视化打字" else "可视化打字")
             }
         }
         val waveform by viewModel.waveform.collectAsStateWithLifecycle()
@@ -244,6 +280,33 @@ private fun VideoBlock(
                 },
             )
         }
+    }
+}
+
+/**
+ * 可视化打字控件行：旋转 {\fr} 滑块（拖拽结束提交）+ 清除 \pos。
+ */
+@Composable
+private fun VisualTypesettingControls(
+    event: AssEvent,
+    onRotationChange: (Int) -> Unit,
+    onClearPos: () -> Unit,
+) {
+    var slider by remember(event.id) { mutableStateOf(VisualTags.getRotation(event.text).toFloat()) }
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("\\fr", style = MaterialTheme.typography.labelMedium)
+        Slider(
+            value = slider,
+            onValueChange = { slider = it },
+            valueRange = 0f..359f,
+            onValueChangeFinished = { onRotationChange(slider.roundToInt()) },
+            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+        )
+        Text("${slider.roundToInt()}°", style = MaterialTheme.typography.labelMedium)
+        TextButton(onClick = onClearPos) { Text("清 \\pos") }
     }
 }
 

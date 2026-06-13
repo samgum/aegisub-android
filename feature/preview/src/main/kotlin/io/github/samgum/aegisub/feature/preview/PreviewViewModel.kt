@@ -8,6 +8,7 @@ import io.github.samgum.aegisub.data.repository.ProjectRepository
 import io.github.samgum.aegisub.data.session.ProjectSessionManager
 import io.github.samgum.aegisub.domain.audio.SpectrogramData
 import io.github.samgum.aegisub.domain.audio.Waveform
+import io.github.samgum.aegisub.domain.edit.VisualTags
 import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.domain.preview.ActiveSubtitleResolver
 import io.github.samgum.aegisub.domain.preview.SubtitleRenderInfo
@@ -219,6 +220,21 @@ class PreviewViewModel @Inject constructor(
         val pos = player.state.value.positionMs
         val event = session.script.value?.events?.firstOrNull { it.id == eventId } ?: return
         editEventTimes(eventId, event.start, SubTime.ofMillis(pos))
+    }
+
+    /** 可视化打字：把 {\pos(x,y)} 写入选中行文本（已有则替换，单撤销点）。 */
+    fun setEventPos(eventId: Long, x: Int, y: Int) {
+        session.editEvent(eventId) { it.copy(text = VisualTags.setPos(it.text, x, y)) }
+    }
+
+    /** 可视化打字：把 {\fr<deg>} 写入选中行文本（单撤销点）。 */
+    fun setEventRotation(eventId: Long, degrees: Int) {
+        session.editEvent(eventId) { it.copy(text = VisualTags.setRotation(it.text, degrees)) }
+    }
+
+    /** 可视化打字：清除选中行的 {\pos}。 */
+    fun clearEventPos(eventId: Long) {
+        session.editEvent(eventId) { it.copy(text = VisualTags.removePos(it.text)) }
     }
 
     /** 选中上一行（并 seek 到其起始）。 */
