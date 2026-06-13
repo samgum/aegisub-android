@@ -8,10 +8,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -27,10 +30,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -46,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.focusable
 import androidx.compose.runtime.LaunchedEffect
@@ -71,6 +77,7 @@ import io.github.samgum.aegisub.feature.preview.components.SubtitleOverlay
 import io.github.samgum.aegisub.feature.preview.components.AudioTimeline
 import io.github.samgum.aegisub.feature.preview.components.SpectrogramView
 import io.github.samgum.aegisub.feature.preview.components.TimingEditPanel
+import io.github.samgum.aegisub.feature.preview.components.VisualToolMode
 import io.github.samgum.aegisub.feature.preview.components.VisualTypesettingOverlay
 
 /**
@@ -193,6 +200,7 @@ private fun VideoBlock(
 ) {
     var showSpectrogram by remember { mutableStateOf(false) }
     var vtMode by remember { mutableStateOf(false) }
+    var vtToolMode by remember { mutableStateOf(VisualToolMode.POSITION) }
     val selectedEvent = state.script.events.firstOrNull { it.id == state.selectedEventId }
     val playResX = state.script.getScriptInfo("PlayResX")?.toIntOrNull() ?: 384
     val playResY = state.script.getScriptInfo("PlayResY")?.toIntOrNull() ?: 288
@@ -206,13 +214,18 @@ private fun VideoBlock(
         ) {
             PlayerSurface(player = viewModel.videoPlayer, modifier = Modifier.fillMaxSize())
             ActiveSubtitleLayer(viewModel = viewModel)
-            // 可视化打字：选中行 + 挂载视频时，在画面上拖拽设 {\pos}
+            // 可视化打字：选中行 + 挂载视频时，在画面上拖拽设 {\pos}/{\move}
             if (vtMode && state.hasMedia && selectedEvent != null) {
                 VisualTypesettingOverlay(
                     playResX = playResX,
                     playResY = playResY,
+                    mode = vtToolMode,
                     currentPos = VisualTags.getPos(selectedEvent.text),
+                    currentMove = VisualTags.getMove(selectedEvent.text),
                     onPosChange = { x, y -> viewModel.setEventPos(selectedEvent.id, x, y) },
+                    onMoveChange = { x1, y1, x2, y2 ->
+                        viewModel.setEventMove(selectedEvent.id, x1, y1, x2, y2)
+                    },
                 )
             }
             if (!state.hasMedia) {
@@ -224,7 +237,8 @@ private fun VideoBlock(
             // 可视化打字模式徽标
             if (vtMode) {
                 Text(
-                    "可视化打字：拖拽画面设 \\pos",
+                    if (vtToolMode == VisualToolMode.POSITION) "可视化打字：拖拽设 \\pos"
+                    else "可视化打字：拖拽起点(绿)/终点(橙)设 \\move",
                     color = Color.White,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.align(Alignment.TopStart).padding(4.dp),
@@ -239,12 +253,16 @@ private fun VideoBlock(
             onFrameBack = viewModel::frameStepBack,
             onFrameForward = viewModel::frameStepForward,
         )
-        // 可视化打字控件：旋转 {\fr} 滑块 + 清除 \pos
+        // 可视化打字控件：模式切换 + 旋转 {\fr} 滑块 + 淡入淡出 {\fad} + 清除
         if (vtMode && selectedEvent != null) {
             VisualTypesettingControls(
                 event = selectedEvent,
+                toolMode = vtToolMode,
+                onToolModeChange = { vtToolMode = it },
                 onRotationChange = { deg -> viewModel.setEventRotation(selectedEvent.id, deg) },
+                onFadeChange = { fin, fout -> viewModel.setEventFade(selectedEvent.id, fin, fout) },
                 onClearPos = { viewModel.clearEventPos(selectedEvent.id) },
+                onClearMove = { viewModel.clearEventMove(selectedEvent.id) },
             )
         }
         // 音频可视化切换：波形 / 频谱 + 可视化打字开关
@@ -284,29 +302,78 @@ private fun VideoBlock(
 }
 
 /**
- * 可视化打字控件行：旋转 {\fr} 滑块（拖拽结束提交）+ 清除 \pos。
+ * 可视化打字控件：模式切换（定位/移动）+ 旋转 {\fr} 滑块 + 淡入淡出 {\fad} + 清除。
  */
 @Composable
 private fun VisualTypesettingControls(
     event: AssEvent,
+    toolMode: VisualToolMode,
+    onToolModeChange: (VisualToolMode) -> Unit,
     onRotationChange: (Int) -> Unit,
+    onFadeChange: (fadeIn: Int, fadeOut: Int) -> Unit,
     onClearPos: () -> Unit,
+    onClearMove: () -> Unit,
 ) {
     var slider by remember(event.id) { mutableStateOf(VisualTags.getRotation(event.text).toFloat()) }
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("\\fr", style = MaterialTheme.typography.labelMedium)
-        Slider(
-            value = slider,
-            onValueChange = { slider = it },
-            valueRange = 0f..359f,
-            onValueChangeFinished = { onRotationChange(slider.roundToInt()) },
-            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-        )
-        Text("${slider.roundToInt()}°", style = MaterialTheme.typography.labelMedium)
-        TextButton(onClick = onClearPos) { Text("清 \\pos") }
+    val existingFade = remember(event.id, event.text) { VisualTags.getFade(event.text) }
+    var fadeIn by remember(event.id) { mutableStateOf((existingFade?.fadeIn ?: 0).toString()) }
+    var fadeOut by remember(event.id) { mutableStateOf((existingFade?.fadeOut ?: 0).toString()) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+        // 模式切换
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FilterChip(
+                selected = toolMode == VisualToolMode.POSITION,
+                onClick = { onToolModeChange(VisualToolMode.POSITION) },
+                label = { Text("\\pos 定位") },
+            )
+            Spacer(Modifier.width(6.dp))
+            FilterChip(
+                selected = toolMode == VisualToolMode.MOVE,
+                onClick = { onToolModeChange(VisualToolMode.MOVE) },
+                label = { Text("\\move 移动") },
+            )
+            Spacer(Modifier.weight(1f))
+            TextButton(
+                onClick = if (toolMode == VisualToolMode.MOVE) onClearMove else onClearPos,
+            ) {
+                Text(if (toolMode == VisualToolMode.MOVE) "清 \\move" else "清 \\pos")
+            }
+        }
+        // 旋转
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("\\fr", style = MaterialTheme.typography.labelMedium)
+            Slider(
+                value = slider,
+                onValueChange = { slider = it },
+                valueRange = 0f..359f,
+                onValueChangeFinished = { onRotationChange(slider.roundToInt()) },
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+            )
+            Text("${slider.roundToInt()}°", style = MaterialTheme.typography.labelMedium)
+        }
+        // 淡入淡出
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("\\fad", style = MaterialTheme.typography.labelMedium)
+            OutlinedTextField(
+                value = fadeIn,
+                onValueChange = { fadeIn = it.filter { ch -> ch.isDigit() } },
+                label = { Text("淡入 ms") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+            )
+            OutlinedTextField(
+                value = fadeOut,
+                onValueChange = { fadeOut = it.filter { ch -> ch.isDigit() } },
+                label = { Text("淡出 ms") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+            )
+            TextButton(onClick = {
+                onFadeChange(fadeIn.toIntOrNull() ?: 0, fadeOut.toIntOrNull() ?: 0)
+            }) { Text("应用") }
+        }
     }
 }
 

@@ -90,4 +90,69 @@ class VisualTagsTest {
         assertEquals(10 to 20, VisualTags.getPos(t))
         assertEquals(45, VisualTags.getRotation(t))
     }
+
+    // ---------------- \move ----------------
+
+    @Test fun setMove_inserts_four_arg_when_no_times() {
+        assertEquals("{\\move(1,2,3,4)}Hi", VisualTags.setMove("Hi", 1, 2, 3, 4))
+    }
+
+    @Test fun setMove_inserts_six_arg_with_times() {
+        assertEquals("{\\move(1,2,3,4,100,500)}Hi", VisualTags.setMove("Hi", 1, 2, 3, 4, 100, 500))
+    }
+
+    @Test fun setMove_replaces_existing() {
+        assertEquals("{\\move(9,8,7,6)}Hi", VisualTags.setMove("{\\move(1,2,3,4)}Hi", 9, 8, 7, 6))
+    }
+
+    @Test fun getMove_parses_four_arg() {
+        assertEquals(VisualTags.MoveParams(1, 2, 3, 4), VisualTags.getMove("{\\move(1,2,3,4)}Hi"))
+    }
+
+    @Test fun getMove_parses_six_arg() {
+        assertEquals(
+            VisualTags.MoveParams(1, 2, 3, 4, 100, 500),
+            VisualTags.getMove("{\\move(1,2,3,4,100,500)}Hi"),
+        )
+    }
+
+    @Test fun getMove_returns_null_when_absent() {
+        assertNull(VisualTags.getMove("Hi"))
+    }
+
+    @Test fun removeMove_drops_only_move() {
+        assertEquals("{\\b1}Hi", VisualTags.removeMove("{\\move(1,2,3,4)\\b1}Hi"))
+    }
+
+    // ---------------- \fad ----------------
+
+    @Test fun setFade_inserts() {
+        assertEquals("{\\fad(200,300)}Hi", VisualTags.setFade("Hi", 200, 300))
+    }
+
+    @Test fun setFade_replaces() {
+        assertEquals("{\\fad(500,600)}Hi", VisualTags.setFade("{\\fad(1,2)}Hi", 500, 600))
+    }
+
+    @Test fun getFade_parses() {
+        assertEquals(VisualTags.FadeParams(200, 300), VisualTags.getFade("{\\fad(200,300)}Hi"))
+    }
+
+    @Test fun getFade_returns_null_when_absent() {
+        assertNull(VisualTags.getFade("Hi"))
+    }
+
+    @Test fun removeFade_drops_only_fad() {
+        assertEquals("{\\b1}Hi", VisualTags.removeFade("{\\fad(1,2)\\b1}Hi"))
+    }
+
+    @Test fun move_and_fad_and_pos_coexist() {
+        var t = VisualTags.setPos("Hi", 10, 20)
+        t = VisualTags.setMove(t, 1, 2, 3, 4)
+        t = VisualTags.setFade(t, 100, 200)
+        // 注意：\pos 与 \move 互斥（libass 中 \move 覆盖 \pos），此处仅校验三者都能存取
+        assertEquals(10 to 20, VisualTags.getPos(t))
+        assertEquals(VisualTags.MoveParams(1, 2, 3, 4), VisualTags.getMove(t))
+        assertEquals(VisualTags.FadeParams(100, 200), VisualTags.getFade(t))
+    }
 }

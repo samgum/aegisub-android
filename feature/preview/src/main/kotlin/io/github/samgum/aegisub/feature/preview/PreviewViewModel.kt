@@ -237,6 +237,21 @@ class PreviewViewModel @Inject constructor(
         session.editEvent(eventId) { it.copy(text = VisualTags.removePos(it.text)) }
     }
 
+    /** 可视化打字：把 {\move(x1,y1,x2,y2)} 写入选中行（整段时长移动，单撤销点）。 */
+    fun setEventMove(eventId: Long, x1: Int, y1: Int, x2: Int, y2: Int) {
+        session.editEvent(eventId) { it.copy(text = VisualTags.setMove(it.text, x1, y1, x2, y2)) }
+    }
+
+    /** 可视化打字：把 {\fad(fadeIn,fadeOut)} 写入选中行（毫秒，单撤销点）。 */
+    fun setEventFade(eventId: Long, fadeIn: Int, fadeOut: Int) {
+        session.editEvent(eventId) { it.copy(text = VisualTags.setFade(it.text, fadeIn, fadeOut)) }
+    }
+
+    /** 可视化打字：清除选中行的 {\move}。 */
+    fun clearEventMove(eventId: Long) {
+        session.editEvent(eventId) { it.copy(text = VisualTags.removeMove(it.text)) }
+    }
+
     /** 选中上一行（并 seek 到其起始）。 */
     fun selectPrevEvent() {
         val script = session.script.value ?: return
