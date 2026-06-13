@@ -47,7 +47,9 @@ class EditorViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val content = repo.getContent(projectId)
-                val script = FormatRegistry.detect(content)?.read(content) ?: AssScript.default()
+                val parsed = FormatRegistry.detect(content)?.read(content) ?: AssScript.default()
+                // 文件写入不保留 event.id，加载后按行序分配稳定唯一 id，供 LazyColumn key 使用
+                val script = parsed.withEvents(parsed.events.mapIndexed { i, e -> e.copy(id = i.toLong()) })
                 stack = SnapshotUndoStack(script)
                 _state.value = EditorUiState.Loaded(script)
                 syncUndoFlags()

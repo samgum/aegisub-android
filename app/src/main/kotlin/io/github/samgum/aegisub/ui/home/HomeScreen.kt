@@ -1,5 +1,6 @@
 package io.github.samgum.aegisub.ui.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -33,7 +34,10 @@ import java.util.Locale
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
+fun HomeScreen(
+    onOpenProject: (Long) -> Unit,
+    viewModel: HomeViewModel = hiltViewModel(),
+) {
     val projects by viewModel.projects.collectAsStateWithLifecycle()
 
     Scaffold(
@@ -60,7 +64,7 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
         } else {
             LazyColumn(modifier = Modifier.padding(padding)) {
                 items(projects, key = { it.id }) { project ->
-                    ProjectRow(project)
+                    ProjectRow(project, onClick = { onOpenProject(project.id) })
                 }
             }
         }
@@ -68,7 +72,7 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun ProjectRow(project: Project) {
+private fun ProjectRow(project: Project, onClick: () -> Unit) {
     val ts = project.lastOpenedAt ?: project.updatedAt
     val date = remember(ts) {
         SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(ts))
@@ -78,5 +82,6 @@ private fun ProjectRow(project: Project) {
             Text(project.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
         },
         supportingContent = { Text("${project.format.uppercase()} · $date") },
+        modifier = Modifier.clickable(onClick = onClick),
     )
 }
