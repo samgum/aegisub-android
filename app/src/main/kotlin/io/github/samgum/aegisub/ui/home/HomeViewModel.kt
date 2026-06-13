@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.samgum.aegisub.data.repository.Project
 import io.github.samgum.aegisub.data.repository.ProjectRepository
 import io.github.samgum.aegisub.domain.format.AssFormat
+import io.github.samgum.aegisub.domain.format.SubtitleImport
 import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.domain.time.SubTime
@@ -51,6 +52,14 @@ class HomeViewModel @Inject constructor(
             val content = AssFormat.write(sample)
             val now = System.currentTimeMillis()
             repo.createProject(name = "字幕工程 $now", format = "ass", content = content)
+        }
+    }
+
+    /** 导入外部字幕文件：界面读取文件名+内容后调用，解析格式并建工程。 */
+    fun importSubtitle(fileName: String, content: String) {
+        viewModelScope.launch {
+            val resolved = SubtitleImport.resolve(fileName, content)
+            repo.createProject(name = resolved.name, format = resolved.format, content = content)
         }
     }
 }
