@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -15,9 +16,11 @@ import kotlinx.collections.immutable.ImmutableList
 import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.time.SubTime
 import io.github.samgum.aegisub.feature.editor.components.EventEditFields
+import io.github.samgum.aegisub.feature.editor.components.LineAction
+import io.github.samgum.aegisub.feature.editor.components.LineActions
 
 /**
- * 双栏右栏常驻详情面板（expanded）：包装 [EventEditFields]，无 Sheet 容器。
+ * 双栏右栏常驻详情面板（expanded）：包装 [EventEditFields]，无 Sheet 容器，附行操作工具条。
  *
  * @author 伤感咩吖
  */
@@ -29,6 +32,7 @@ fun EventDetail(
     onTimesChanged: (start: SubTime, end: SubTime) -> Unit,
     onStyleChanged: (String) -> Unit,
     onLayerChanged: (Int) -> Unit,
+    onLineAction: (LineAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -47,5 +51,8 @@ fun EventDetail(
             onStyleChanged = onStyleChanged,
             onLayerChanged = onLayerChanged,
         )
+        HorizontalDivider()
+        Text("行操作", style = MaterialTheme.typography.labelLarge)
+        LineActions(onAction = onLineAction)
     }
 }

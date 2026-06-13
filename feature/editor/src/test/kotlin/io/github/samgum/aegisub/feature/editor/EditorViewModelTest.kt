@@ -12,6 +12,7 @@ import io.github.samgum.aegisub.data.settings.ThemeMode
 import io.github.samgum.aegisub.data.settings.UserSettings
 import io.github.samgum.aegisub.domain.format.TimePrecision
 import io.github.samgum.aegisub.domain.time.SubTime
+import io.github.samgum.aegisub.feature.editor.components.LineAction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -181,6 +182,69 @@ class EditorViewModelTest {
         assertEquals("", v.exportContent())
     }
 
+    // ---------- 行级操作（LineOps 经 session.editEvents 单撤销点）----------
+
+    @Test fun line_action_duplicate_adds_line_and_is_undoable() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE_MULTI)
+        advanceUntilIdle()
+        val id = v.currentScript()!!.events[0].id
+        v.applyLineAction(id, LineAction.DUPLICATE)
+        assertEquals(3, v.currentScript()!!.events.size)
+        v.undo()
+        assertEquals(2, v.currentScript()!!.events.size)
+    }
+
+    @Test fun line_action_delete_removes_target() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE_MULTI)
+        advanceUntilIdle()
+        val events = v.currentScript()!!.events
+        val firstId = events[0].id
+        val secondText = events[1].text
+        v.applyLineAction(firstId, LineAction.DELETE)
+        val after = v.currentScript()!!.events
+        assertEquals(1, after.size)
+        assertEquals(secondText, after[0].text)
+    }
+
+    @Test fun line_action_move_up_swaps_order() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE_MULTI)
+        advanceUntilIdle()
+        val events = v.currentScript()!!.events
+        val secondId = events[1].id
+        v.applyLineAction(secondId, LineAction.MOVE_UP)
+        // 上移后，原第二行排在第一
+        assertEquals(secondId, v.currentScript()!!.events[0].id)
+    }
+
+    @Test fun line_action_join_next_merges_two_lines() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE_MULTI)
+        advanceUntilIdle()
+        val firstId = v.currentScript()!!.events[0].id
+        v.applyLineAction(firstId, LineAction.JOIN_NEXT)
+        val after = v.currentScript()!!.events
+        assertEquals(1, after.size)
+        // 文本拼接
+        assertEquals("HelloWorld", after[0].text)
+    }
+
+    @Test fun line_action_split_doubles_count() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE_MULTI)
+        advanceUntilIdle()
+        val firstId = v.currentScript()!!.events[0].id
+        v.applyLineAction(firstId, LineAction.SPLIT)
+        assertEquals(3, v.currentScript()!!.events.size)
+    }
+
+    @Test fun line_action_insert_after_appends_blank() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE_MULTI)
+        advanceUntilIdle()
+        val firstId = v.currentScript()!!.events[0].id
+        v.applyLineAction(firstId, LineAction.INSERT_AFTER)
+        val after = v.currentScript()!!.events
+        assertEquals(3, after.size)
+        assertEquals("", after[1].text)
+    }
+
     // ---------- 历史版本恢复 ----------
 
     @Test fun take_snapshot_persists_content() = runTest(dispatcher) {
@@ -284,4 +348,18 @@ Style: Default,Arial,48,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Hello
+""".trimIndent()
+
+private val ASS_SAMPLE_MULTI = """
+[Script Info]
+ScriptType: v4.00+
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,48,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,10,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Hello
+Dialogue: 0,0:00:04.00,0:00:06.00,Default,,0,0,0,,World
 """.trimIndent()

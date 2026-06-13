@@ -26,6 +26,7 @@ import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.domain.time.SubTime
 import io.github.samgum.aegisub.feature.editor.components.EditorActions
 import io.github.samgum.aegisub.feature.editor.components.EventRow
+import io.github.samgum.aegisub.feature.editor.components.LineAction
 
 /**
  * 平板/大屏双栏布局（expanded/Medium）：左列表 | 右详情常驻。
@@ -50,6 +51,7 @@ fun EditorTwoPane(
     onTimesChanged: (eventId: Long, start: SubTime, end: SubTime) -> Unit,
     onStyleChanged: (eventId: Long, style: String) -> Unit,
     onLayerChanged: (eventId: Long, layer: Int) -> Unit,
+    onLineAction: (eventId: Long, LineAction) -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -87,6 +89,7 @@ fun EditorTwoPane(
                     onTimesChanged = { s, e -> onTimesChanged(selected.id, s, e) },
                     onStyleChanged = { onStyleChanged(selected.id, it) },
                     onLayerChanged = { onLayerChanged(selected.id, it) },
+                    onLineAction = { action -> onLineAction(selected.id, action) },
                     modifier = Modifier.weight(0.6f),
                 )
             } else {

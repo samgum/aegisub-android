@@ -161,6 +161,7 @@ fun EditorScreen(
                         onTimesChanged = viewModel::updateEventTimes,
                         onStyleChanged = viewModel::updateEventStyle,
                         onLayerChanged = viewModel::setEventLayer,
+                        onLineAction = viewModel::applyLineAction,
                     )
                 }
                 FloatingActionButton(
@@ -293,6 +294,7 @@ private fun CompactEditor(
             onTimesChanged = { start, end -> viewModel.updateEventTimes(ev.id, start, end) },
             onStyleChanged = { viewModel.updateEventStyle(ev.id, it) },
             onLayerChanged = { viewModel.setEventLayer(ev.id, it) },
+            onLineAction = { viewModel.applyLineAction(ev.id, it) },
         )
     }
 }

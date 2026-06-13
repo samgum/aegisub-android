@@ -12,10 +12,12 @@ import io.github.samgum.aegisub.data.settings.SettingsRepository
 import io.github.samgum.aegisub.domain.format.AssFormat
 import io.github.samgum.aegisub.domain.format.WriteOptions
 import io.github.samgum.aegisub.domain.edit.DeleteEmpty
+import io.github.samgum.aegisub.domain.edit.LineOps
 import io.github.samgum.aegisub.domain.edit.ShiftTarget
 import io.github.samgum.aegisub.domain.edit.StyleReplace
 import io.github.samgum.aegisub.domain.edit.TimeShift
 import io.github.samgum.aegisub.domain.model.AssScript
+import io.github.samgum.aegisub.feature.editor.components.LineAction
 import io.github.samgum.aegisub.domain.text.FindReplace
 import io.github.samgum.aegisub.domain.time.SubTime
 import kotlinx.coroutines.flow.SharingStarted
@@ -108,6 +110,31 @@ class EditorViewModel @Inject constructor(
     /** 批量替换事件样式名（一次撤销点）。from 为空则 no-op。 */
     fun replaceStyles(fromStyle: String, toStyle: String) {
         session.editEvents { StyleReplace.apply(it, fromStyle, toStyle) }
+    }
+
+    // ---------- 行级操作（复制/删除/插入/分割/合并/上下移，每次一个撤销点）----------
+
+    /**
+     * 对 [eventId] 指定的事件应用行级操作。
+     * 下标在变换闭包内按当前事件列表解析，保证与显示一致；id 未命中则 no-op。
+     */
+    fun applyLineAction(eventId: Long, action: LineAction) {
+        session.editEvents { current ->
+            val index = current.indexOfFirst { it.id == eventId }
+            if (index < 0) return@editEvents current
+            when (action) {
+                LineAction.INSERT_BEFORE -> LineOps.insertBefore(current, index)
+                LineAction.INSERT_AFTER -> LineOps.insertAfter(current, index)
+                LineAction.DUPLICATE -> LineOps.duplicate(current, index)
+                LineAction.SPLIT -> LineOps.splitAtMidpoint(current, index)
+                LineAction.JOIN_NEXT ->
+                    if (index in 0..current.lastIndex - 1) LineOps.joinConcatenate(current, listOf(index, index + 1))
+                    else current
+                LineAction.MOVE_UP -> LineOps.moveUp(current, index)
+                LineAction.MOVE_DOWN -> LineOps.moveDown(current, index)
+                LineAction.DELETE -> LineOps.delete(current, index)
+            }
+        }
     }
 
     fun undo() = session.undo()
