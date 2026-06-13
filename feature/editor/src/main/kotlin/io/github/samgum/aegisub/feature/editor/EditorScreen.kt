@@ -7,6 +7,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,9 +23,10 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -52,19 +55,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toPersistentList
 import io.github.samgum.aegisub.data.settings.LayoutMode
 import io.github.samgum.aegisub.domain.edit.FramerateConverter
+import io.github.samgum.aegisub.domain.edit.ScriptInfoOps
 import io.github.samgum.aegisub.domain.edit.ShiftTarget
 import io.github.samgum.aegisub.domain.edit.SortKey
 import io.github.samgum.aegisub.domain.edit.SortOrder
 import io.github.samgum.aegisub.domain.model.AssEvent
+import io.github.samgum.aegisub.domain.model.AssInfo
 import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.feature.editor.compact.EventEditSheet
 import io.github.samgum.aegisub.feature.editor.compact.EventListScreen
@@ -110,6 +117,7 @@ fun EditorScreen(
     var showHistory by remember { mutableStateOf(false) }
     var showSort by remember { mutableStateOf(false) }
     var showFramerate by remember { mutableStateOf(false) }
+    var showProperties by remember { mutableStateOf(false) }
 
     when (val s = state) {
         EditorUiState.Loading ->
@@ -188,6 +196,7 @@ fun EditorScreen(
             onShiftTimes = { showToolbox = false; showShiftTimes = true },
             onSort = { showToolbox = false; showSort = true },
             onFramerate = { showToolbox = false; showFramerate = true },
+            onProperties = { showToolbox = false; showProperties = true },
             onDeleteEmpty = { showToolbox = false; showDeleteEmpty = true },
             onStyleReplace = { showToolbox = false; showStyleReplace = true },
             onOpenStyleManager = { showToolbox = false; onOpenStyles(viewModel.projectId) },
@@ -261,6 +270,20 @@ fun EditorScreen(
                 showFramerate = false
             },
         )
+    }
+
+    if (showProperties) {
+        val info = (state as? EditorUiState.Loaded)?.script?.info
+        if (info != null) {
+            PropertiesSheet(
+                info = info,
+                onDismiss = { showProperties = false },
+                onApply = { changes ->
+                    viewModel.applyScriptInfo(changes)
+                    showProperties = false
+                },
+            )
+        }
     }
 
     if (showHistory) {
@@ -385,6 +408,7 @@ private fun ToolboxSheet(
     onShiftTimes: () -> Unit,
     onSort: () -> Unit,
     onFramerate: () -> Unit,
+    onProperties: () -> Unit,
     onDeleteEmpty: () -> Unit,
     onStyleReplace: () -> Unit,
     onOpenStyleManager: () -> Unit,
@@ -405,10 +429,13 @@ private fun ToolboxSheet(
                 ToolEntry(Icons.AutoMirrored.Filled.ArrowForward, "时间偏移", "整体前移/后移，可仅作用于选中行之后") { onShiftTimes() }
             }
             item {
-                ToolEntry(Icons.Filled.Sort, "排序", "按起始/结束/样式/演员/效果/文本/层，升降序") { onSort() }
+                ToolEntry(Icons.AutoMirrored.Filled.Sort, "排序", "按起始/结束/样式/演员/效果/文本/层，升降序") { onSort() }
             }
             item {
                 ToolEntry(Icons.Filled.Movie, "帧率转换", "按 to/from 帧率等比缩放全部时间（24↔25↔30 等）") { onFramerate() }
+            }
+            item {
+                ToolEntry(Icons.Filled.Settings, "脚本属性", "编辑分辨率 / 换行样式 / 碰撞 / 缩放描边 / 计时速度") { onProperties() }
             }
             item {
                 ToolEntry(Icons.Filled.Delete, "删除空行", "移除纯空 / 仅标签的行，保留绘图行") { onDeleteEmpty() }
@@ -663,6 +690,116 @@ private fun FramerateDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
+}
+
+/**
+ * 脚本属性面板（复刻桌面 Aegisub Properties）：
+ * 编辑 [Script Info] 的分辨率 / 换行样式 / 碰撞 / 缩放描边 / 计时速度等。
+ * 一次性提交全部改动（单撤销点）。空文本字段不写入（避免插入空键值行）。
+ *
+ * @author 伤感咩吖
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PropertiesSheet(
+    info: ImmutableList<AssInfo>,
+    onDismiss: () -> Unit,
+    onApply: (Map<String, String>) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var title by remember { mutableStateOf(ScriptInfoOps.get(info, "Title") ?: "") }
+    var resX by remember { mutableStateOf(ScriptInfoOps.get(info, "PlayResX") ?: "") }
+    var resY by remember { mutableStateOf(ScriptInfoOps.get(info, "PlayResY") ?: "") }
+    var wrap by remember { mutableStateOf(ScriptInfoOps.get(info, "WrapStyle") ?: "0") }
+    var sbs by remember { mutableStateOf(ScriptInfoOps.get(info, "ScaledBorderAndShadow") ?: "yes") }
+    var collisions by remember { mutableStateOf(ScriptInfoOps.get(info, "Collisions") ?: "Normal") }
+    var timer by remember { mutableStateOf(ScriptInfoOps.get(info, "Timer") ?: "100") }
+    val wrapOptions = listOf(
+        "0" to "智能换行（顶宽）",
+        "1" to "行尾换行",
+        "2" to "不换行",
+        "3" to "智能换行（底宽）",
+    )
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("脚本属性", style = MaterialTheme.typography.titleLarge)
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                label = { Text("标题（Title）") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = resX,
+                    onValueChange = { resX = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("PlayResX") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                )
+                OutlinedTextField(
+                    value = resY,
+                    onValueChange = { resY = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("PlayResY") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Text("换行样式（WrapStyle）", style = MaterialTheme.typography.labelLarge)
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                wrapOptions.forEach { (v, label) ->
+                    FilterChip(selected = wrap == v, onClick = { wrap = v }, label = { Text(label) })
+                }
+            }
+            Text("缩放描边阴影（ScaledBorderAndShadow）", style = MaterialTheme.typography.labelLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilterChip(selected = sbs == "yes", onClick = { sbs = "yes" }, label = { Text("是（yes）") })
+                FilterChip(selected = sbs == "no", onClick = { sbs = "no" }, label = { Text("否（no）") })
+            }
+            Text("碰撞（Collisions）", style = MaterialTheme.typography.labelLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilterChip(selected = collisions == "Normal", onClick = { collisions = "Normal" }, label = { Text("Normal（向上堆叠）") })
+                FilterChip(selected = collisions == "Reverse", onClick = { collisions = "Reverse" }, label = { Text("Reverse（向下堆叠）") })
+            }
+            OutlinedTextField(
+                value = timer,
+                onValueChange = { timer = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                label = { Text("计时速度（Timer，100 = 正常）") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onDismiss) { Text("取消") }
+                Button(onClick = {
+                    val changes = buildMap {
+                        if (title.isNotBlank()) put("Title", title)
+                        if (resX.isNotBlank()) put("PlayResX", resX)
+                        if (resY.isNotBlank()) put("PlayResY", resY)
+                        put("WrapStyle", wrap)
+                        put("ScaledBorderAndShadow", sbs)
+                        put("Collisions", collisions)
+                        if (timer.isNotBlank()) put("Timer", timer)
+                    }
+                    onApply(changes)
+                }) { Text("应用") }
+            }
+        }
+    }
 }
 
 /**

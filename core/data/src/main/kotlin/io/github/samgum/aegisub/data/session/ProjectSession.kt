@@ -1,6 +1,7 @@
 package io.github.samgum.aegisub.data.session
 
 import io.github.samgum.aegisub.domain.model.AssEvent
+import io.github.samgum.aegisub.domain.model.AssInfo
 import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.domain.model.AssStyle
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +38,9 @@ interface ProjectSession {
 
     /** 对整个样式列表应用任意变换（增删改），一次提交（一个撤销点，用于样式编辑器）。 */
     fun editStyles(transform: (List<AssStyle>) -> List<AssStyle>)
+
+    /** 对整个 [Script Info] 键值列表应用任意变换（增删改），一次提交（一个撤销点，用于脚本属性编辑）。 */
+    fun editInfo(transform: (List<AssInfo>) -> List<AssInfo>)
 
     /**
      * 用序列化内容覆盖当前脚本，作为一个新的撤销点入栈（用于「历史版本恢复」）。

@@ -25,6 +25,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -243,6 +244,29 @@ class EditorViewModelTest {
         val after = v.currentScript()!!.events
         assertEquals(3, after.size)
         assertEquals("", after[1].text)
+    }
+
+    // ---------- 脚本属性（applyScriptInfo 单撤销点）----------
+
+    @Test fun apply_script_info_writes_and_is_undoable() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE_MULTI)
+        advanceUntilIdle()
+        v.applyScriptInfo(mapOf("Title" to "测试标题", "PlayResX" to "1920", "WrapStyle" to "2"))
+        val script = v.currentScript()!!
+        assertEquals("测试标题", script.getScriptInfo("Title"))
+        assertEquals("1920", script.getScriptInfo("PlayResX"))
+        assertEquals("2", script.getScriptInfo("WrapStyle"))
+        v.undo()
+        assertNull(v.currentScript()!!.getScriptInfo("Title"))
+    }
+
+    @Test fun apply_script_info_empty_map_is_noop() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE_MULTI)
+        advanceUntilIdle()
+        val before = v.currentScript()!!.info.size
+        v.applyScriptInfo(emptyMap())
+        assertEquals(before, v.currentScript()!!.info.size)
+        assertEquals(false, v.canUndo.value)
     }
 
     // ---------- 历史版本恢复 ----------

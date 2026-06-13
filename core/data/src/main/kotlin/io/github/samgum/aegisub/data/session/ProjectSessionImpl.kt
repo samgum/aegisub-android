@@ -4,6 +4,7 @@ import io.github.samgum.aegisub.data.repository.ProjectRepository
 import io.github.samgum.aegisub.domain.format.AssFormat
 import io.github.samgum.aegisub.domain.format.FormatRegistry
 import io.github.samgum.aegisub.domain.model.AssEvent
+import io.github.samgum.aegisub.domain.model.AssInfo
 import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.domain.model.AssStyle
 import io.github.samgum.aegisub.domain.undo.SnapshotUndoStack
@@ -114,6 +115,13 @@ internal class ProjectSessionImpl(
         val current = s.current
         val newStyles = transform(current.styles).toPersistentList()
         commit(current.withStyles(newStyles))
+    }
+
+    override fun editInfo(transform: (List<AssInfo>) -> List<AssInfo>) {
+        val s = stack ?: return
+        val current = s.current
+        val newInfo = transform(current.info).toPersistentList()
+        commit(current.withInfo(newInfo))
     }
 
     override fun restoreFromContent(content: String) {

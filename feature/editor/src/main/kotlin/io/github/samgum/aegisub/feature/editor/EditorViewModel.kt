@@ -18,6 +18,7 @@ import io.github.samgum.aegisub.domain.edit.ShiftTarget
 import io.github.samgum.aegisub.domain.edit.SortKey
 import io.github.samgum.aegisub.domain.edit.SortLines
 import io.github.samgum.aegisub.domain.edit.SortOrder
+import io.github.samgum.aegisub.domain.edit.ScriptInfoOps
 import io.github.samgum.aegisub.domain.edit.StyleReplace
 import io.github.samgum.aegisub.domain.edit.TimeShift
 import io.github.samgum.aegisub.domain.model.AssScript
@@ -149,6 +150,19 @@ class EditorViewModel @Inject constructor(
     /** 帧率转换：按 toFps/fromFps 等比缩放全部起止时间（一次撤销点）。 */
     fun convertFramerate(fromFps: Double, toFps: Double) {
         session.editEvents { FramerateConverter.rescale(it, fromFps, toFps) }
+    }
+
+    /**
+     * 批量写入 [Script Info] 键值（一次撤销点，用于脚本属性面板）。
+     * 已存在键原地更新，新键追加；空 Map 为 no-op。
+     */
+    fun applyScriptInfo(changes: Map<String, String>) {
+        if (changes.isEmpty()) return
+        session.editInfo { info ->
+            var result = info
+            for ((k, v) in changes) result = ScriptInfoOps.set(result, k, v)
+            result
+        }
     }
 
     fun undo() = session.undo()
