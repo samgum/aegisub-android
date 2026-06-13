@@ -4,6 +4,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import io.github.samgum.aegisub.data.repository.Bookmark
+import io.github.samgum.aegisub.data.repository.BookmarkRepository
 import io.github.samgum.aegisub.data.repository.ProjectRepository
 import io.github.samgum.aegisub.data.session.ProjectSessionManager
 import io.github.samgum.aegisub.domain.audio.SpectrogramData
@@ -54,6 +56,7 @@ sealed interface PreviewUiState {
 class PreviewViewModel @Inject constructor(
     manager: ProjectSessionManager,
     private val repo: ProjectRepository,
+    private val bookmarksRepo: BookmarkRepository,
     private val player: VideoPlayer,
     private val extractor: WaveformExtractor,
     savedStateHandle: SavedStateHandle,
@@ -62,6 +65,10 @@ class PreviewViewModel @Inject constructor(
     val projectId: Long = savedStateHandle.get<String>("projectId")!!.toLong()
 
     private val session = manager.open(projectId)
+
+    /** 书签列表（按时间升序），打轴/校对时记录关键位置。 */
+    val bookmarks: StateFlow<List<Bookmark>> = bookmarksRepo.observeBookmarks(projectId)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _hasMedia = MutableStateFlow(false)
     private val _selectedEventId = MutableStateFlow<Long?>(null)
@@ -292,6 +299,23 @@ class PreviewViewModel @Inject constructor(
 
     fun undo() = session.undo()
     fun redo() = session.redo()
+
+    /** 在当前播放位置加一个书签。 */
+    fun addBookmark(label: String) {
+        viewModelScope.launch {
+            bookmarksRepo.addBookmark(projectId, player.state.value.positionMs, label, System.currentTimeMillis())
+        }
+    }
+
+    /** 删除书签。 */
+    fun deleteBookmark(id: Long) {
+        viewModelScope.launch { bookmarksRepo.deleteBookmark(id) }
+    }
+
+    /** 跳到书签时间点。 */
+    fun seekToBookmark(timeMs: Long) {
+        player.seekTo(timeMs)
+    }
 
     override fun onCleared() {
         player.release()

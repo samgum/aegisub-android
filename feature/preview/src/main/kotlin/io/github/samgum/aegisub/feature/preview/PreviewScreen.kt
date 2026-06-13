@@ -314,6 +314,7 @@ private fun PreviewPanelContent(
     val selectedEvent = state.script.events.firstOrNull { it.id == state.selectedEventId }
     val waveform by viewModel.waveform.collectAsStateWithLifecycle()
     val spectrogram by viewModel.spectrogram.collectAsStateWithLifecycle()
+    val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
     when (panel) {
         PreviewPanel.SUBTITLES -> EventListColumn(
             events = state.script.events,
@@ -358,6 +359,35 @@ private fun PreviewPanelContent(
                 TimingEditLayer(state = state, viewModel = viewModel)
             } else {
                 Text(stringResource(R.string.timing_pick_row), modifier = Modifier.padding(16.dp))
+            }
+            // 书签：在当前位加书签 + 列表跳转/删除
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("书签", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Button(onClick = { viewModel.addBookmark("") }) { Text("加书签（当前位）") }
+            }
+            if (bookmarks.isEmpty()) {
+                Text("暂无书签", style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            } else {
+                bookmarks.forEach { bm ->
+                    ListItem(
+                        headlineContent = { Text(bm.label.ifBlank { "书签 ${formatTime(bm.timeMs)}" }) },
+                        supportingContent = {
+                            Text(formatTime(bm.timeMs), style = MaterialTheme.typography.bodySmall)
+                        },
+                        trailingContent = {
+                            Row {
+                                TextButton(onClick = { viewModel.seekToBookmark(bm.timeMs) }) { Text("跳转") }
+                                TextButton(onClick = { viewModel.deleteBookmark(bm.id) }) { Text("删除") }
+                            }
+                        },
+                        modifier = Modifier.clickable { viewModel.seekToBookmark(bm.timeMs) },
+                    )
+                }
             }
         }
 

@@ -10,10 +10,13 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import io.github.samgum.aegisub.data.local.BookmarkDao
 import io.github.samgum.aegisub.data.local.ProjectDao
 import io.github.samgum.aegisub.data.local.SnapshotDao
 import io.github.samgum.aegisub.data.local.SubtitleDatabase
+import io.github.samgum.aegisub.data.repository.BookmarkRepository
 import io.github.samgum.aegisub.data.repository.ProjectRepository
+import io.github.samgum.aegisub.data.repository.RoomBookmarkRepository
 import io.github.samgum.aegisub.data.repository.RoomProjectRepository
 import io.github.samgum.aegisub.data.repository.RoomSnapshotRepository
 import io.github.samgum.aegisub.data.repository.SnapshotRepository
@@ -37,7 +40,11 @@ object DataModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): SubtitleDatabase =
         Room.databaseBuilder(context, SubtitleDatabase::class.java, "subtitle.db")
-            .addMigrations(SubtitleDatabase.MIGRATION_1_2, SubtitleDatabase.MIGRATION_2_3)
+            .addMigrations(
+                SubtitleDatabase.MIGRATION_1_2,
+                SubtitleDatabase.MIGRATION_2_3,
+                SubtitleDatabase.MIGRATION_3_4,
+            )
             .build()
 
     @Provides
@@ -47,12 +54,19 @@ object DataModule {
     fun provideSnapshotDao(database: SubtitleDatabase): SnapshotDao = database.snapshotDao()
 
     @Provides
+    fun provideBookmarkDao(database: SubtitleDatabase): BookmarkDao = database.bookmarkDao()
+
+    @Provides
     @Singleton
     fun provideProjectRepository(dao: ProjectDao): ProjectRepository = RoomProjectRepository(dao)
 
     @Provides
     @Singleton
     fun provideSnapshotRepository(dao: SnapshotDao): SnapshotRepository = RoomSnapshotRepository(dao)
+
+    @Provides
+    @Singleton
+    fun provideBookmarkRepository(dao: BookmarkDao): BookmarkRepository = RoomBookmarkRepository(dao)
 
     @Provides
     @Singleton
