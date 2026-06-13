@@ -4,6 +4,11 @@ import androidx.lifecycle.SavedStateHandle
 import io.github.samgum.aegisub.data.repository.Project
 import io.github.samgum.aegisub.data.repository.ProjectRepository
 import io.github.samgum.aegisub.data.session.ProjectSessionManager
+import io.github.samgum.aegisub.data.settings.LayoutMode
+import io.github.samgum.aegisub.data.settings.SettingsRepository
+import io.github.samgum.aegisub.data.settings.ThemeMode
+import io.github.samgum.aegisub.data.settings.UserSettings
+import io.github.samgum.aegisub.domain.format.TimePrecision
 import io.github.samgum.aegisub.domain.time.SubTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -34,8 +39,12 @@ class EditorViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun vm(content: String?): EditorViewModel =
-        EditorViewModel(ProjectSessionManager(FakeProjectRepository(content)), SavedStateHandle(mapOf("projectId" to "42")))
+    private fun vm(content: String?, precision: TimePrecision = TimePrecision.AUTO): EditorViewModel =
+        EditorViewModel(
+            ProjectSessionManager(FakeProjectRepository(content)),
+            FakeSettingsRepository(precision),
+            SavedStateHandle(mapOf("projectId" to "42")),
+        )
 
     @Test fun loads_ass_script_from_content() = runTest(dispatcher) {
         val v = vm(ASS_SAMPLE)
@@ -54,7 +63,7 @@ class EditorViewModelTest {
     }
 
     @Test fun error_state_when_repo_throws() = runTest(dispatcher) {
-        val v = EditorViewModel(ProjectSessionManager(ThrowingRepo()), SavedStateHandle(mapOf("projectId" to "1")))
+        val v = EditorViewModel(ProjectSessionManager(ThrowingRepo()), FakeSettingsRepository(), SavedStateHandle(mapOf("projectId" to "1")))
         advanceUntilIdle()
         assertTrue(v.state.value is EditorUiState.Error)
     }
@@ -124,14 +133,14 @@ class EditorViewModelTest {
 
     @Test fun first_version_is_not_saved() = runTest(dispatcher) {
         val repo = FakeProjectRepository(ASS_SAMPLE)
-        EditorViewModel(ProjectSessionManager(repo), SavedStateHandle(mapOf("projectId" to "42")))
+        EditorViewModel(ProjectSessionManager(repo), FakeSettingsRepository(), SavedStateHandle(mapOf("projectId" to "42")))
         advanceUntilIdle()
         assertEquals("加载首版本不应触发保存", 0, repo.savedContents.size)
     }
 
     @Test fun edits_are_debounced_then_saved() = runTest(dispatcher) {
         val repo = FakeProjectRepository(ASS_SAMPLE)
-        val v = EditorViewModel(ProjectSessionManager(repo), SavedStateHandle(mapOf("projectId" to "42")))
+        val v = EditorViewModel(ProjectSessionManager(repo), FakeSettingsRepository(), SavedStateHandle(mapOf("projectId" to "42")))
         advanceUntilIdle()
         val id = v.currentScript()!!.events.first().id
         v.updateEventText(id, "Changed")
@@ -143,6 +152,30 @@ class EditorViewModelTest {
         advanceUntilIdle()
         assertEquals(1, repo.savedContents.size)
         assertTrue(repo.savedContents.first().contains("Changed"))
+    }
+
+    // ---------- 导出精度（用户设置穿透到 ASS 写入）----------
+
+    @Test fun export_default_is_centisecond() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE, TimePrecision.AUTO)
+        advanceUntilIdle()
+        val out = v.exportContent()
+        assertTrue("AUTO 应厘秒：$out", out.contains("0:00:01.00,"))
+    }
+
+    @Test fun export_three_ms_is_millisecond() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE, TimePrecision.THREE_MS)
+        advanceUntilIdle()
+        val out = v.exportContent()
+        assertTrue("THREE_MS 应毫秒：$out", out.contains("0:00:01.000,"))
+    }
+
+    @Test fun export_empty_when_load_failed() = runTest(dispatcher) {
+        // 加载失败时 script 维持 null，导出空串而非抛异常
+        val v = EditorViewModel(ProjectSessionManager(ThrowingRepo()), FakeSettingsRepository(), SavedStateHandle(mapOf("projectId" to "1")))
+        advanceUntilIdle()
+        assertTrue(v.state.value is EditorUiState.Error)
+        assertEquals("", v.exportContent())
     }
 
     private class FakeProjectRepository(private val content: String?) : ProjectRepository {
@@ -170,6 +203,18 @@ class EditorViewModelTest {
         override suspend fun touchLastOpened(id: Long, now: Long) {}
         override suspend fun getMediaUri(id: Long): String? = null
         override suspend fun setMediaUri(id: Long, mediaUri: String) {}
+    }
+
+    /** 固定返回指定导出精度的假设置仓储（其余取默认）。 */
+    private class FakeSettingsRepository(
+        private val precision: TimePrecision = TimePrecision.AUTO,
+    ) : SettingsRepository {
+        override val settings: Flow<UserSettings> = flowOf(
+            UserSettings(exportPrecision = precision),
+        )
+        override suspend fun setThemeMode(mode: ThemeMode) {}
+        override suspend fun setExportPrecision(p: TimePrecision) {}
+        override suspend fun setLayoutMode(mode: LayoutMode) {}
     }
 }
 

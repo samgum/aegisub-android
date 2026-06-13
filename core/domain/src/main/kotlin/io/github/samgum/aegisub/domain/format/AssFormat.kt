@@ -49,6 +49,8 @@ class AssFormatBase(private val ssaMode: Boolean = false) : SubtitleFormat {
     override fun write(script: AssScript, options: WriteOptions): String = buildString {
         val scriptType = if (ssaMode) "v4.00" else "v4.00+"
         val stylesHeader = if (ssaMode) "[V4 Styles]" else "[V4+ Styles]"
+        // 时间精度穿透到 Dialogue 行：THREE_MS=毫秒，TWO_MS/AUTO=厘秒（ASS 标准），与 LRC 写入一致。
+        val msPrecision = options.timePrecision == TimePrecision.THREE_MS
         appendLine("[Script Info]")
         val infoLines = script.info.toMutableList()
         if (infoLines.none { it.key.equals("ScriptType", true) })
@@ -62,7 +64,7 @@ class AssFormatBase(private val ssaMode: Boolean = false) : SubtitleFormat {
         appendLine()
         appendLine("[Events]")
         appendLine("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text")
-        script.events.forEach { appendLine(it.toLine()) }
+        script.events.forEach { appendLine(it.toLine(msPrecision)) }
     }
 }
 

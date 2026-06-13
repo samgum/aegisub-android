@@ -42,6 +42,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.collections.immutable.toPersistentList
+import io.github.samgum.aegisub.data.settings.LayoutMode
 import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.feature.editor.compact.EventEditSheet
@@ -64,6 +65,7 @@ fun EditorScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val canUndo by viewModel.canUndo.collectAsStateWithLifecycle()
     val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
+    val layoutMode by viewModel.layoutMode.collectAsStateWithLifecycle()
     var editingId by remember { mutableStateOf<Long?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -99,8 +101,13 @@ fun EditorScreen(
             }
 
         is EditorUiState.Loaded -> {
-            // Material 宽度断点：< 600dp 为 Compact（手机竖屏），否则 Medium/Expanded（平板/横屏）
-            val isCompact = LocalConfiguration.current.screenWidthDp < 600
+            // 布局：用户设置优先（COMPACT/EXPANDED 强制），AUTO 时按 Material 宽度断点
+            // < 600dp 为 Compact（手机竖屏），否则 Medium/Expanded（平板/横屏）
+            val isCompact = when (layoutMode) {
+                LayoutMode.COMPACT -> true
+                LayoutMode.EXPANDED -> false
+                LayoutMode.AUTO -> LocalConfiguration.current.screenWidthDp < 600
+            }
             Box(Modifier.fillMaxSize()) {
                 if (isCompact) {
                     CompactEditor(

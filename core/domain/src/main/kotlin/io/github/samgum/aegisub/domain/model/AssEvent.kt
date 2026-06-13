@@ -26,10 +26,14 @@ data class AssEvent(
             when (it) { is DialogueBlock.Plain -> it.text; else -> "" }
         }
 
-    fun toLine(): String {
+    /**
+     * 序列化为 Dialogue/Comment 行。
+     * @param msPrecision true=毫秒（H:MM:SS.mmm，3 位），false=厘秒（H:MM:SS.cc，2 位，ASS 标准）。
+     */
+    fun toLine(msPrecision: Boolean = false): String {
         val kind = if (comment) "Comment" else "Dialogue"
         val parts = listOf(
-            layer.toString(), start.toAssString(false), end.toAssString(false), style, actor,
+            layer.toString(), start.toAssString(msPrecision), end.toAssString(msPrecision), style, actor,
             margins.left.toString(), margins.right.toString(), margins.vertical.toString(), effect, text,
         )
         return "$kind: " + parts.joinToString(",")

@@ -5,13 +5,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.samgum.aegisub.data.session.ProjectSessionManager
+import io.github.samgum.aegisub.data.settings.LayoutMode
+import io.github.samgum.aegisub.data.settings.SettingsRepository
 import io.github.samgum.aegisub.domain.format.AssFormat
+import io.github.samgum.aegisub.domain.format.WriteOptions
 import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.domain.text.FindReplace
 import io.github.samgum.aegisub.domain.time.SubTime
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
@@ -25,6 +30,7 @@ import javax.inject.Inject
 @HiltViewModel
 class EditorViewModel @Inject constructor(
     manager: ProjectSessionManager,
+    private val settings: SettingsRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -43,6 +49,11 @@ class EditorViewModel @Inject constructor(
 
     val canUndo: StateFlow<Boolean> = session.canUndo
     val canRedo: StateFlow<Boolean> = session.canRedo
+
+    /** 编辑器布局偏好（AUTO/COMPACT/EXPANDED），来自用户设置。 */
+    val layoutMode: StateFlow<LayoutMode> = settings.settings
+        .map { it.layoutMode }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, LayoutMode.AUTO)
 
     /** 当前已加载脚本（未加载返回 null）。 */
     fun currentScript(): AssScript? = session.script.value
@@ -69,6 +80,12 @@ class EditorViewModel @Inject constructor(
     fun undo() = session.undo()
     fun redo() = session.redo()
 
-    /** 导出当前脚本为 ASS 文本。无脚本时返回空串。 */
-    fun exportContent(): String = session.script.value?.let { AssFormat.write(it) } ?: ""
+    /**
+     * 导出当前脚本为 ASS 文本。读取用户设置的导出精度（厘秒/毫秒/自动），
+     * 无脚本时返回空串。
+     */
+    suspend fun exportContent(): String {
+        val precision = settings.settings.first().exportPrecision
+        return session.script.value?.let { AssFormat.write(it, WriteOptions(timePrecision = precision)) } ?: ""
+    }
 }
