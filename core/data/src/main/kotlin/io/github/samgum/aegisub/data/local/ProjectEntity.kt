@@ -17,4 +17,5 @@ data class ProjectEntity(
     val createdAt: Long,     // epoch millis
     val updatedAt: Long,     // epoch millis
     val lastOpenedAt: Long?, // epoch millis，null 表示从未打开
+    val mediaUri: String? = null, // SAF 持久化视频 content URI，null 表示未挂载视频
 )

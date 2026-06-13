@@ -33,4 +33,7 @@ interface ProjectDao {
 
     @Query("UPDATE projects SET lastOpenedAt = :ts WHERE id = :id")
     suspend fun touchLastOpened(id: Long, ts: Long)
+
+    @Query("UPDATE projects SET mediaUri = :uri WHERE id = :id")
+    suspend fun updateMediaUri(id: Long, uri: String)
 }
