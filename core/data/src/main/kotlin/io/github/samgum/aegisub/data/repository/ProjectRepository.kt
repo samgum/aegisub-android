@@ -23,6 +23,7 @@ data class Project(
 interface ProjectRepository {
     fun observeProjects(): Flow<List<Project>>
     fun observeProject(id: Long): Flow<Project?>
+    suspend fun getContent(id: Long): String
     suspend fun createProject(name: String, format: String, content: String): Long
     suspend fun updateContent(id: Long, content: String, now: Long)
     suspend fun delete(id: Long)
@@ -39,6 +40,9 @@ class RoomProjectRepository(
 
     override fun observeProject(id: Long): Flow<Project?> =
         dao.observeById(id).map { it?.toModel() }
+
+    override suspend fun getContent(id: Long): String =
+        dao.getById(id)?.content ?: ""
 
     override suspend fun createProject(name: String, format: String, content: String): Long {
         val now = clock()

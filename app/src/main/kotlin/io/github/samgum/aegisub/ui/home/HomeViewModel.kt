@@ -6,7 +6,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.samgum.aegisub.data.repository.Project
 import io.github.samgum.aegisub.data.repository.ProjectRepository
 import io.github.samgum.aegisub.domain.format.AssFormat
+import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.model.AssScript
+import io.github.samgum.aegisub.domain.time.SubTime
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -28,7 +30,25 @@ class HomeViewModel @Inject constructor(
 
     fun createSampleProject() {
         viewModelScope.launch {
-            val content = AssFormat.write(AssScript.default())
+            val sample = AssScript.default().withEvents(
+                listOf(
+                    AssEvent(
+                        start = SubTime.ofMillis(1_000),
+                        end = SubTime.ofMillis(3_000),
+                        text = "欢迎来到 Aegisub Android",
+                    ),
+                    AssEvent(
+                        start = SubTime.ofMillis(3_200),
+                        end = SubTime.ofMillis(6_000),
+                        text = "点击字幕行即可编辑（Task 2B）",
+                    ),
+                    AssEvent(
+                        comment = true,
+                        text = "这是一条注释行示例",
+                    ),
+                ),
+            )
+            val content = AssFormat.write(sample)
             val now = System.currentTimeMillis()
             repo.createProject(name = "字幕工程 $now", format = "ass", content = content)
         }

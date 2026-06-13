@@ -6,10 +6,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.MaterialTheme
 import dagger.hilt.android.AndroidEntryPoint
-import io.github.samgum.aegisub.ui.home.HomeScreen
+import io.github.samgum.aegisub.navigation.AppNavigation
 
 /**
- * 应用入口。Hilt 注入 + Compose 启动到主屏。
+ * 应用入口。Hilt 注入 + Compose 启动到导航图。
  *
  * @author 伤感咩吖
  */
@@ -20,7 +20,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
-                HomeScreen()
+                AppNavigation()
             }
         }
     }
