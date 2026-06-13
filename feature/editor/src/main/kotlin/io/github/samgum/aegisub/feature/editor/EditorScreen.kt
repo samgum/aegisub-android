@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Movie
@@ -149,6 +150,7 @@ fun EditorScreen(
     var showKaraoke by remember { mutableStateOf(false) }
     var showTimingPP by remember { mutableStateOf(false) }
     var showResample by remember { mutableStateOf(false) }
+    var showPasteOver by remember { mutableStateOf(false) }
 
     when (val s = state) {
         EditorUiState.Loading ->
@@ -265,6 +267,7 @@ fun EditorScreen(
             onKaraoke = { showToolbox = false; showKaraoke = true },
             onTimingPP = { showToolbox = false; showTimingPP = true },
             onResample = { showToolbox = false; showResample = true },
+            onPasteOver = { showToolbox = false; showPasteOver = true },
             onDeleteEmpty = { showToolbox = false; showDeleteEmpty = true },
             onStyleReplace = { showToolbox = false; showStyleReplace = true },
             onOpenStyleManager = { showToolbox = false; onOpenStyles(viewModel.projectId) },
@@ -438,6 +441,26 @@ fun EditorScreen(
         )
     }
 
+    if (showPasteOver) {
+        val loaded = state as? EditorUiState.Loaded
+        val events = loaded?.script?.events
+        if (events != null && events.isNotEmpty()) {
+            val orderedIds = if (selectionMode && selectedIds.isNotEmpty()) {
+                events.filter { it.id in selectedIds }.map { it.id }
+            } else {
+                events.map { it.id }
+            }
+            PasteOverDialog(
+                targetCount = orderedIds.size,
+                onDismiss = { showPasteOver = false },
+                onApply = { text ->
+                    viewModel.pasteOver(orderedIds, text)
+                    showPasteOver = false
+                },
+            )
+        }
+    }
+
     if (showExportFormat) {
         ExportFormatDialog(
             onDismiss = { showExportFormat = false },
@@ -585,6 +608,7 @@ private fun ToolboxSheet(
     onKaraoke: () -> Unit,
     onTimingPP: () -> Unit,
     onResample: () -> Unit,
+    onPasteOver: () -> Unit,
     onDeleteEmpty: () -> Unit,
     onStyleReplace: () -> Unit,
     onOpenStyleManager: () -> Unit,
@@ -636,6 +660,9 @@ private fun ToolboxSheet(
             }
             item {
                 ToolEntry(Icons.Filled.AspectRatio, stringResource(R.string.tool_resample), stringResource(R.string.tool_resample_desc)) { onResample() }
+            }
+            item {
+                ToolEntry(Icons.Filled.ContentPaste, stringResource(R.string.tool_paste_over), stringResource(R.string.tool_paste_over_desc)) { onPasteOver() }
             }
             item {
                 ToolEntry(Icons.Filled.PlayArrow, stringResource(R.string.tool_history), stringResource(R.string.tool_history_desc)) { onOpenHistory() }
@@ -1019,6 +1046,43 @@ private fun PropertiesSheet(
             }
         }
     }
+}
+
+/**
+ * 粘贴覆盖对话框：多行文本输入，按字幕顺序覆盖目标行（选中行优先）。
+ *
+ * @author 伤感咩吖
+ */
+@Composable
+private fun PasteOverDialog(
+    targetCount: Int,
+    onDismiss: () -> Unit,
+    onApply: (text: String) -> Unit,
+) {
+    var text by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.dialog_paste_over)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(R.string.paste_over_hint) + "（目标 $targetCount 行）",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 4,
+                    maxLines = 8,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onApply(text) }) { Text(stringResource(R.string.common_apply)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
+    )
 }
 
 /**

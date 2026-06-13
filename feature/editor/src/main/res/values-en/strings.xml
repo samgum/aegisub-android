@@ -50,6 +50,10 @@
     <string name="tool_timing_pp_desc">Lead-in/out + overlap removal with minimum gap</string>
     <string name="tool_resample">Resolution Resampler</string>
     <string name="tool_resample_desc">Change PlayRes and scale \\pos/font/margins (e.g. 384×288→1920×1080)</string>
+    <string name="tool_paste_over">Paste Over</string>
+    <string name="tool_paste_over_desc">Overwrite selected (or all) lines\' text in order, preserving timing/style</string>
+    <string name="dialog_paste_over">Paste Over</string>
+    <string name="paste_over_hint">One text per line, applied in subtitle order (selected lines, or all if none):</string>
     <string name="tool_delete_empty">Delete Empty Lines</string>
     <string name="tool_delete_empty_desc">Remove blank / tag-only lines, keep drawings</string>
     <string name="tool_style_replace">Style Replace</string>

@@ -17,6 +17,7 @@ import io.github.samgum.aegisub.domain.edit.FramerateConverter
 import io.github.samgum.aegisub.domain.edit.KaraokeGenerator
 import io.github.samgum.aegisub.domain.edit.KaraokeMode
 import io.github.samgum.aegisub.domain.edit.LineOps
+import io.github.samgum.aegisub.domain.edit.PasteOver
 import io.github.samgum.aegisub.domain.edit.ResolutionResampler
 import io.github.samgum.aegisub.domain.edit.ShiftTarget
 import io.github.samgum.aegisub.domain.edit.SortKey
@@ -193,6 +194,15 @@ class EditorViewModel @Inject constructor(
     /** 批量排序（一次撤销点）。 */
     fun sortLines(key: SortKey, order: SortOrder) {
         session.editEvents { SortLines.apply(it, key, order) }
+    }
+
+    /**
+     * 粘贴覆盖：按 [orderedIds] 顺序把多行文本逐行覆盖到对应事件文本（保留时间/样式，单撤销点）。
+     * 粘贴文本按换行分割。
+     */
+    fun pasteOver(orderedIds: List<Long>, text: String) {
+        val lines = text.replace("\r\n", "\n").split("\n")
+        session.editEvents { PasteOver.apply(it, orderedIds, lines) }
     }
 
     /** 帧率转换：按 toFps/fromFps 等比缩放全部起止时间（一次撤销点）。 */

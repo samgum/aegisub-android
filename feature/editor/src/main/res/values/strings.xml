@@ -50,6 +50,10 @@
     <string name="tool_timing_pp_desc">lead-in/out 提前起始延后结束 + 去重叠强制最小间隙</string>
     <string name="tool_resample">分辨率重采样</string>
     <string name="tool_resample_desc">改 PlayRes 并按比例缩放 \\pos/字号/边距（如 384×288→1920×1080）</string>
+    <string name="tool_paste_over">粘贴覆盖</string>
+    <string name="tool_paste_over_desc">多行文本按顺序覆盖选中行（无选中则全部行）的文本，保留时间/样式</string>
+    <string name="dialog_paste_over">粘贴覆盖</string>
+    <string name="paste_over_hint">每行一条文本，按字幕顺序覆盖（选中行优先，否则全部行）：</string>
     <string name="tool_delete_empty">删除空行</string>
     <string name="tool_delete_empty_desc">移除纯空 / 仅标签的行，保留绘图行</string>
     <string name="tool_style_replace">样式批量替换</string>
