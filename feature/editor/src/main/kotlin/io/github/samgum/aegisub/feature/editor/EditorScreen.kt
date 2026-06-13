@@ -1,5 +1,9 @@
 package io.github.samgum.aegisub.feature.editor
 
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,18 +16,24 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.collections.immutable.toPersistentList
 import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.model.AssScript
@@ -48,6 +58,16 @@ fun EditorScreen(
     val canUndo by viewModel.canUndo.collectAsStateWithLifecycle()
     val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
     var editingId by remember { mutableStateOf<Long?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch { writeExportFile(context, uri, viewModel.exportContent()) }
+        }
+    }
+    val onExport = { exportLauncher.launch("字幕工程.ass") }
 
     when (val s = state) {
         EditorUiState.Loading ->
@@ -81,6 +101,7 @@ fun EditorScreen(
                     onDismissEdit = { editingId = null },
                     onBack = onBack,
                     onOpenPreview = { onOpenPreview(viewModel.projectId) },
+                    onExport = onExport,
                     canUndo = canUndo,
                     canRedo = canRedo,
                     viewModel = viewModel,
@@ -92,6 +113,7 @@ fun EditorScreen(
                     onEventClick = { editingId = it.id },
                     onBack = onBack,
                     onOpenPreview = { onOpenPreview(viewModel.projectId) },
+                    onExport = onExport,
                     canUndo = canUndo,
                     canRedo = canRedo,
                     onUndo = viewModel::undo,
@@ -114,6 +136,7 @@ private fun CompactEditor(
     onDismissEdit: () -> Unit,
     onBack: () -> Unit,
     onOpenPreview: () -> Unit,
+    onExport: () -> Unit,
     canUndo: Boolean,
     canRedo: Boolean,
     viewModel: EditorViewModel,
@@ -126,6 +149,7 @@ private fun CompactEditor(
             IconButton(onClick = onOpenPreview) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = "预览")
             }
+            TextButton(onClick = onExport) { Text("导出") }
             EditorActions(
                 canUndo = canUndo,
                 canRedo = canRedo,
@@ -146,3 +170,9 @@ private fun CompactEditor(
         )
     }
 }
+
+/** 把导出内容写入 SAF 返回的 URI（IO 线程）。 */
+private suspend fun writeExportFile(context: Context, uri: Uri, content: String) =
+    withContext(Dispatchers.IO) {
+        context.contentResolver.openOutputStream(uri)?.use { it.write(content.toByteArray()) }
+    }

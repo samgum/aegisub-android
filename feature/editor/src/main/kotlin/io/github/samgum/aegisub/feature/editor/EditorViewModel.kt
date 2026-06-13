@@ -142,6 +142,9 @@ class EditorViewModel @Inject constructor(
         }
     }
 
+    /** 导出当前脚本为 ASS 文本（编辑器内部规范格式）。无脚本时返回空串。 */
+    fun exportContent(): String = currentScript()?.let { AssFormat.write(it) } ?: ""
+
     private companion object {
         const val AUTOSAVE_DEBOUNCE_MS = 800L
     }

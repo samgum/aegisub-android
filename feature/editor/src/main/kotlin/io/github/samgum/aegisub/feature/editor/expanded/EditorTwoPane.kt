@@ -15,6 +15,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -40,6 +41,7 @@ fun EditorTwoPane(
     onEventClick: (AssEvent) -> Unit,
     onBack: () -> Unit,
     onOpenPreview: () -> Unit,
+    onExport: () -> Unit,
     canUndo: Boolean,
     canRedo: Boolean,
     onUndo: () -> Unit,
@@ -62,6 +64,7 @@ fun EditorTwoPane(
                     IconButton(onClick = onOpenPreview) {
                         Icon(Icons.Filled.PlayArrow, contentDescription = "预览")
                     }
+                    TextButton(onClick = onExport) { Text("导出") }
                     EditorActions(canUndo, canRedo, onUndo, onRedo)
                 },
             )
