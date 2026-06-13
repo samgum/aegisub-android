@@ -10,4 +10,5 @@ plugins {
 }
 rootProject.name = "aegisub-android"
 include(":core:domain")
+include(":core:data")
 include(":app")
