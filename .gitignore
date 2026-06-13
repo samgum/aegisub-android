@@ -1,0 +1,53 @@
+# ===== Gradle =====
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+out/
+*.aar
+
+# ===== Android Studio / IntelliJ =====
+.idea/
+*.iml
+*.iws
+*.ipr
+captures/
+.cxx/
+.navigation/
+
+# ===== Kotlin =====
+*.kotlin_metadata
+
+# ===== 本地构建产物 / 日志 =====
+*.log
+hs_err_pid*
+
+# ============ ⚠️ 敏感文件（绝不提交）⚠️ ============
+# 环境变量 / 密钥
+.env
+.env.*
+*.env
+secrets.properties
+secrets.*
+# 签名密钥（keystore）—— 泄露等于 app 被冒名签名
+*.keystore
+*.jks
+keystore.properties
+keystore.*
+# 凭据 / 配置中的敏感信息
+local.properties
+google-services.json
+# Cloudflare / 源站 / 服务器真实 IP 相关
+*.pem
+*.key
+*.crt
+*.p12
+# ============ ⚠️ 敏感文件 END ⚠️ ============
+
+# ===== 操作系统杂物 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 参考仓库（本地分析用，不入库）=====
+aegisub-reference/
+reference/
