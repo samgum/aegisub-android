@@ -96,13 +96,33 @@
 ## Phase 9 · 第二轮复刻（进行中）
 依据 [docs/COMPARISON.md](docs/COMPARISON.md) 的缺口清单逐项补齐：
 
-- [ ] 字幕网格**多选**：批量复制/删除/平移/排序/套样式作用于选中行
-- [ ] `{\move}` 动画（两点拖拽）+ `{\fad}`/`{\fade}` 淡入淡出编辑器
+- [x] 字幕网格**多选**：批量复制/删除/块上下移/全选 + 平移/样式替换限定选中行（P9-1）
+- [x] `{\move}` 两点动画（双手柄）+ `{\fad}` 淡入淡出字段（P9-2）
+- [x] **时间后处理**：去重叠 / lead-in/out / 最小间隙（P9-4）
+- [x] **分辨率重采样器**（Resolution Resampler）：改 PlayResX/Y 并按比例缩放 {\pos}/{\move} / 样式字号 / 边距 / 描边（P9-5）
+- [x] 导出转换（ASS/SRT/WebVTT，新增 VttFormat）（P9-6）
 - [ ] `{\clip}`/`{\iclip}` 矩形与矢量裁剪工具
-- [ ] Karaoke **交互式计时**：拖拽音节边界调整逐音节时长
-- [ ] **分辨率重采样器**（Resolution Resampler）：改 PlayResX/Y 并按比例缩放 {\pos} / 样式字号 / 边距
-- [ ] **时间后处理**：去重叠 / lead-in/out / 关键帧吸附
-- [ ] 粘贴覆盖（Paste Over）+ 导出转换（SRT/VTT）
+- [ ] Karaoke **交互式计时**：拖拽音节边界调整逐音节时长（P9-3）
+- [ ] 粘贴覆盖（Paste Over）
 - [ ] 关键帧导入与吸附；书签
-- [ ] libass JNI 精确渲染（替换简化 Compose 渲染）
+
+## Phase 10 · 第三轮：多语言 i18n + 关于页 ✅（壳层）
+- [x] strings.xml（默认简体中文）+ values-en 双语资源
+- [x] 语言偏好 system/zh/en，经 AppCompatDelegate 应用 per-app locale（minSdk 26 兼容）
+- [x] 主屏 / 设置 / 关于 stringResource 化
+- [x] 关于页（作者伤感咩吖 / 许可证 / 版本 / GitHub 链接）
+- [ ] feature 模块（editor/preview）字符串全面 i18n 化（Phase 11 续）
+
+## Phase 11 · 第四轮（规划）：补齐剩余缺口
+- [ ] Karaoke 交互式计时（P9-3）
+- [ ] `{\clip}`/`{\iclip}` 裁剪工具
+- [ ] 粘贴覆盖 + 各类作者字段 / YCbCr Matrix 编辑
+- [ ] 关键帧导入/检测 + 吸附；书签
+- [ ] feature 模块全面 i18n 化
+
+## Phase 12 · 第五轮（规划）：优化与适配
+- [ ] 性能（libass JNI 渲染预备 / 持久向量深化）
+- [ ] 折叠屏 / DeX / Desktop Mode 实测适配
+- [ ] 第二轮桌面端完整比对 + 优化
+
 

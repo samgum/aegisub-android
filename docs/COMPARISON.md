@@ -16,7 +16,7 @@
 | TXT 读写 | ✅ | |
 | LRC 读写 | ✅ | 4 种时间格式 + 混合检测 |
 | 自动检测格式 | ✅ | `FormatRegistry` |
-| MicroDVD / Kate / WebVTT / Matroska | ❌ | Phase 9 候选 |
+| MicroDVD / Kate / WebVTT / Matroska | 🟡 | WebVTT ✅（P9-6）；MicroDVD/Kate/Matroska ❌ |
 | Aegisub 工程快照 / 崩溃自动恢复 | 🟡 | 有历史版本恢复 + 防抖自动保存；无崩溃恢复点 |
 | 字体收集/挂载（Fonts Collector） | ❌ | 远期 |
 | 附件（字体/图片内嵌） | ❌ | 远期 |
@@ -43,7 +43,7 @@
 |---|---|---|
 | 虚拟列表（大文件） | ✅ | LazyColumn 稳定 key |
 | 单选行编辑 | ✅ | |
-| **多选**（Shift/Ctrl 区间/点选） | ❌ | **Phase 9 重点**：批量操作当前仅全局，不支持选中行集合 |
+| **多选**（Shift/Ctrl 区间/点选） | ✅ | 长按进入选择、复选、块上下移/复制/删除/全选；平移与样式替换可限定选中行（P9-1） |
 | 列排序 | ✅ | `SortLines` |
 | 列显示/隐藏（层/起始/结束/样式/演员/效果） | 🟡 | 详情面板有全部字段；网格仅显示起止+样式+文本 |
 | 注释行（Comment） | ✅ | |
@@ -79,9 +79,9 @@
 | Karaoke **交互式计时**（拖音节边界） | ❌ | **Phase 9 重点** |
 | 可视化 {\pos} 拖拽 | ✅ | `VisualTypesettingOverlay`（Phase 8，脚本坐标系映射） |
 | 可视化 {\fr} 旋转 | ✅ | 滑块（Phase 8） |
-| 可视化 {\move} 两点动画 | ❌ | Phase 9 |
-| 可视化 {\clip}/{\iclip} 裁剪 | ❌ | Phase 9 |
-| 可视化 {\fad}/{\fade} 淡入淡出 | ❌ | Phase 9 |
+| 可视化 {\move} 两点动画 | ✅ | 双手柄（起点绿/终点橙），脚本坐标系（P9-2） |
+| 可视化 {\fad}/{\fade} 淡入淡出 | 🟡 | {\fad} ✅ 字段（P9-2）；{\fade} 7 参 ❌ |
+| 可视化 {\clip}/{\iclip} 裁剪 | ❌ | Phase 11 |
 | {\fscx}/{\fscy} 缩放手柄 | ❌ | Phase 9 |
 | {\org} 3D 旋转原点 | ❌ | 远期 |
 | 矢量裁剪工具（Vector Clip） | ❌ | 远期 |
@@ -97,7 +97,7 @@
 | WASD 踩点热键 | ✅ | |
 | **关键帧吸附**（Snap to Keyframes） | ❌ | Phase 9（需关键帧导入/检测） |
 | **场景吸附**（Snap to Scenes） | ❌ | Phase 9 |
-| 时间后处理（去重叠 / lead-in/out） | ❌ | Phase 9 |
+| 时间后处理（去重叠 / lead-in/out） | ✅ | lead-in/out + 去重叠强制最小间隙（P9-4） |
 | Kanji Timer（汉字计时） | ❌ | 远期 |
 | 书签（Bookmarks） | ❌ | Phase 9 候选 |
 
@@ -119,7 +119,9 @@
 | 响应式布局（手机/平板/横竖屏） | ✅ | compact/expanded 断点 + 用户偏好 |
 | 首选项（主题/精度/布局） | ✅ | DataStore |
 | 外接键鼠快捷键 | ✅ | 预览键盘；编辑器部分 |
-| **分辨率重采样器**（Resolution Resampler） | ❌ | Phase 9 |
+| **分辨率重采样器**（Resolution Resampler） | ✅ | 缩放 {\pos}/{\move}+字号/描边/边距+更新 PlayRes（P9-5） |
+| **多语言（i18n）** | 🟡 | 壳层 ✅（主屏/设置/关于，system/zh/en）；feature 模块待迁移（Phase 10/11） |
+| **关于页（About）** | ✅ | 作者/许可证/版本/GitHub 链接（Phase 10） |
 | Lua Automation | ❌ | 远期 |
 | 插件系统 | ❌ | 远期 |
 | AI 辅助（听写/翻译/对齐） | ❌ | 远期 |
@@ -127,25 +129,25 @@
 
 ---
 
-## Phase 9 缺口清单（优先级排序）
+## Phase 9–10 进展（第二轮 / 第三轮复刻）
 
-**P0（核心工作流缺口）：**
-1. **字幕网格多选** —— Shift 区间 / Ctrl 点选；批量复制/删除/平移/排序/套样式作用于选中行集合（当前批量工具仅全局）。
-2. **Karaoke 交互式计时** —— 在音频/时间轴上拖拽音节边界，逐音节调整 {\k} 时长。
-3. **{\move} 动画 + {\fad}/{\fade} 淡入淡出** —— 可视化打字补全，覆盖最常见的动效标签。
+**Phase 9（第二轮，已完成项）：**
+- ✅ 字幕网格**多选批量**（P9-1）：长按进入选择、复选、块上下移、复制/删除/全选；时间偏移与样式替换可限定选中行。
+- ✅ **{\move} 两点动画 + {\fad} 淡入淡出**（P9-2）：可视化打字双模式（定位/移动），起点绿/终点橙双手柄，旋转滑块 + 淡入淡出字段。
+- ✅ **时间后处理**（P9-4）：lead-in/out + 去重叠强制最小间隙。
+- ✅ **分辨率重采样器**（P9-5）：缩放 {\pos}/{\move} + 字号/描边/边距 + 更新 PlayResX/Y。
+- ✅ **导出格式转换**（P9-6）：ASS / SRT / WebVTT（新增 VttFormat，剥离标签）。
 
-**P1（打轴精度）：**
-4. **关键帧导入/检测 + 吸附**（Snap to Keyframes）。
-5. **时间后处理**：去重叠、lead-in/out、相邻行间隙规范化。
-6. **分辨率重采样器**：改 PlayResX/Y 并按比例缩放 {\pos} / 样式字号 / 边距 / 描边。
+**Phase 10（第三轮，已完成项）：**
+- ✅ **多语言 i18n**：strings.xml（默认 zh）+ values-en；语言偏好 system/zh/en，AppCompatDelegate per-app locale；主屏/设置/关于已 stringResource 化（feature 模块字符串迁移待续）。
+- ✅ **关于页**：应用名/标语/作者（伤感咩吖）/许可证/版本/GitHub 链接。
 
-**P2（完整度）：**
-7. **{\clip}/{\iclip}** 矩形与矢量裁剪工具。
-8. **粘贴覆盖 + 导出转换**（SRT/VTT，带样式剥离选项）。
-9. **各类作者字段 / YCbCr Matrix** 编辑（批量写键值基础设施已就绪，差 UI）。
-10. **书签 / 列显示配置**。
+**仍待补（Phase 11+ 第四/五轮）：**
+1. Karaoke **交互式计时**（拖音节边界逐音节调整 {\k}）。
+2. **粘贴覆盖**（Paste Over）—— 导出转换已完，行级粘贴覆盖待补。
+3. **{\clip}/{\iclip}** 矩形与矢量裁剪工具。
+4. **关键帧导入/检测 + 吸附** + 书签。
+5. **各类作者字段 / YCbCr Matrix** 编辑（批量写键值已就绪，差 UI）。
+6. feature 模块（editor/preview）字符串全面 i18n 化。
+7. libass JNI 精确渲染；MicroDVD / Matroska 格式；Lua Automation / 插件 / AI 辅助（远期）。
 
-**P3（重型，远期）：**
-11. libass JNI 精确渲染（替换简化 Compose 渲染）。
-12. MicroDVD / WebVTT / Matroska 格式。
-13. Lua Automation / 插件系统 / AI 辅助。
