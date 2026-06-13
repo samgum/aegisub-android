@@ -3,10 +3,13 @@ package io.github.samgum.aegisub.feature.editor
 import androidx.lifecycle.SavedStateHandle
 import io.github.samgum.aegisub.data.repository.Project
 import io.github.samgum.aegisub.data.repository.ProjectRepository
+import io.github.samgum.aegisub.domain.time.SubTime
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -18,10 +21,11 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * EditorViewModel 加载逻辑测试。
+ * EditorViewModel 加载 + 编辑 + 撤销重做 + 防抖保存测试。
  *
  * @author 伤感咩吖
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class EditorViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
@@ -60,12 +64,95 @@ class EditorViewModelTest {
         assertEquals(false, v.canUndo.value)
     }
 
+    // ---------- Task 2B.1：编辑操作 + 撤销重做 ----------
+
+    @Test fun updateEventText_changes_text_and_enables_undo() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE)
+        advanceUntilIdle()
+        val id = v.currentScript()!!.events.first().id
+        v.updateEventText(id, "Changed")
+        assertEquals("Changed", v.currentScript()!!.events.first().text)
+        assertEquals(true, v.canUndo.value)
+    }
+
+    @Test fun updateEventTimes_changes_start_end() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE)
+        advanceUntilIdle()
+        val id = v.currentScript()!!.events.first().id
+        v.updateEventTimes(id, SubTime.ofMillis(5_000), SubTime.ofMillis(9_000))
+        val e = v.currentScript()!!.events.first()
+        assertEquals(5_000L, e.start.millis)
+        assertEquals(9_000L, e.end.millis)
+    }
+
+    @Test fun updateEventStyle_and_layer() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE)
+        advanceUntilIdle()
+        val id = v.currentScript()!!.events.first().id
+        v.updateEventStyle(id, "Title")
+        v.setEventLayer(id, 3)
+        val e = v.currentScript()!!.events.first()
+        assertEquals("Title", e.style)
+        assertEquals(3, e.layer)
+    }
+
+    @Test fun undo_restores_previous_and_enables_redo() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE)
+        advanceUntilIdle()
+        val id = v.currentScript()!!.events.first().id
+        v.updateEventText(id, "Changed")
+        v.undo()
+        assertEquals("Hello", v.currentScript()!!.events.first().text)
+        assertEquals(false, v.canUndo.value)
+        assertEquals(true, v.canRedo.value)
+    }
+
+    @Test fun redo_reapplies_edit() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE)
+        advanceUntilIdle()
+        val id = v.currentScript()!!.events.first().id
+        v.updateEventText(id, "Changed")
+        v.undo()
+        v.redo()
+        assertEquals("Changed", v.currentScript()!!.events.first().text)
+        assertEquals(true, v.canUndo.value)
+        assertEquals(false, v.canRedo.value)
+    }
+
+    // ---------- Task 2B.2：防抖自动保存 ----------
+
+    @Test fun first_version_is_not_saved() = runTest(dispatcher) {
+        val repo = FakeProjectRepository(ASS_SAMPLE)
+        EditorViewModel(repo, SavedStateHandle(mapOf("projectId" to "42")))
+        advanceUntilIdle()
+        assertEquals("加载首版本不应触发保存", 0, repo.savedContents.size)
+    }
+
+    @Test fun edits_are_debounced_then_saved() = runTest(dispatcher) {
+        val repo = FakeProjectRepository(ASS_SAMPLE)
+        val v = EditorViewModel(repo, SavedStateHandle(mapOf("projectId" to "42")))
+        advanceUntilIdle()
+        val id = v.currentScript()!!.events.first().id
+        v.updateEventText(id, "Changed")
+        // advanceTimeBy 推进虚拟时间但 debounce(800) 未到期，不应触发保存
+        advanceTimeBy(799)
+        assertEquals("debounce 未满不应保存", 0, repo.savedContents.size)
+        // 再推进 2ms（累计 801 > 800）到期，触发回写
+        advanceTimeBy(2)
+        advanceUntilIdle()
+        assertEquals(1, repo.savedContents.size)
+        assertTrue(repo.savedContents.first().contains("Changed"))
+    }
+
     private class FakeProjectRepository(private val content: String?) : ProjectRepository {
+        val savedContents = mutableListOf<String>()
         override fun observeProjects(): Flow<List<Project>> = flowOf(emptyList())
         override fun observeProject(id: Long): Flow<Project?> = flowOf(null)
         override suspend fun getContent(id: Long): String = content ?: ""
         override suspend fun createProject(name: String, format: String, content: String) = 0L
-        override suspend fun updateContent(id: Long, content: String, now: Long) {}
+        override suspend fun updateContent(id: Long, content: String, now: Long) {
+            savedContents.add(content)
+        }
         override suspend fun delete(id: Long) {}
         override suspend fun touchLastOpened(id: Long, now: Long) {}
     }
