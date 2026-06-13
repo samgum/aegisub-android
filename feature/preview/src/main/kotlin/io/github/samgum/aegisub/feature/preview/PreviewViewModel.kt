@@ -118,6 +118,13 @@ class PreviewViewModel @Inject constructor(
         player.seekTo(positionMs)
     }
 
+    /** 相对当前位置 seek（键盘左右键）；越界钳到 [0, duration]。 */
+    fun seekRelative(deltaMs: Long) {
+        val cur = player.state.value.positionMs
+        val maxMs = player.state.value.durationMs
+        player.seekTo((cur + deltaMs).coerceIn(0L, maxOf(0L, maxMs)))
+    }
+
     fun setSpeed(rate: Float) {
         player.setSpeed(rate)
     }
