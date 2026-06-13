@@ -7,10 +7,17 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,6 +75,7 @@ fun EditorScreen(
         }
     }
     val onExport = { exportLauncher.launch("字幕工程.ass") }
+    var showFindReplace by remember { mutableStateOf(false) }
 
     when (val s = state) {
         EditorUiState.Loading ->
@@ -93,38 +101,54 @@ fun EditorScreen(
         is EditorUiState.Loaded -> {
             // Material 宽度断点：< 600dp 为 Compact（手机竖屏），否则 Medium/Expanded（平板/横屏）
             val isCompact = LocalConfiguration.current.screenWidthDp < 600
-            if (isCompact) {
-                CompactEditor(
-                    script = s.script,
-                    editingId = editingId,
-                    onEventClick = { editingId = it.id },
-                    onDismissEdit = { editingId = null },
-                    onBack = onBack,
-                    onOpenPreview = { onOpenPreview(viewModel.projectId) },
-                    onExport = onExport,
-                    canUndo = canUndo,
-                    canRedo = canRedo,
-                    viewModel = viewModel,
-                )
-            } else {
-                EditorTwoPane(
-                    script = s.script,
-                    editingId = editingId,
-                    onEventClick = { editingId = it.id },
-                    onBack = onBack,
-                    onOpenPreview = { onOpenPreview(viewModel.projectId) },
-                    onExport = onExport,
-                    canUndo = canUndo,
-                    canRedo = canRedo,
-                    onUndo = viewModel::undo,
-                    onRedo = viewModel::redo,
-                    onTextChanged = viewModel::updateEventText,
-                    onTimesChanged = viewModel::updateEventTimes,
-                    onStyleChanged = viewModel::updateEventStyle,
-                    onLayerChanged = viewModel::setEventLayer,
-                )
+            Box(Modifier.fillMaxSize()) {
+                if (isCompact) {
+                    CompactEditor(
+                        script = s.script,
+                        editingId = editingId,
+                        onEventClick = { editingId = it.id },
+                        onDismissEdit = { editingId = null },
+                        onBack = onBack,
+                        onOpenPreview = { onOpenPreview(viewModel.projectId) },
+                        onExport = onExport,
+                        canUndo = canUndo,
+                        canRedo = canRedo,
+                        viewModel = viewModel,
+                    )
+                } else {
+                    EditorTwoPane(
+                        script = s.script,
+                        editingId = editingId,
+                        onEventClick = { editingId = it.id },
+                        onBack = onBack,
+                        onOpenPreview = { onOpenPreview(viewModel.projectId) },
+                        onExport = onExport,
+                        canUndo = canUndo,
+                        canRedo = canRedo,
+                        onUndo = viewModel::undo,
+                        onRedo = viewModel::redo,
+                        onTextChanged = viewModel::updateEventText,
+                        onTimesChanged = viewModel::updateEventTimes,
+                        onStyleChanged = viewModel::updateEventStyle,
+                        onLayerChanged = viewModel::setEventLayer,
+                    )
+                }
+                FloatingActionButton(
+                    onClick = { showFindReplace = true },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                ) { Icon(Icons.Filled.Search, contentDescription = "查找替换") }
             }
         }
+    }
+
+    if (showFindReplace) {
+        FindReplaceDialog(
+            onDismiss = { showFindReplace = false },
+            onReplace = { q, r, regex, ic ->
+                viewModel.replaceAll(q, r, regex, ic)
+                showFindReplace = false
+            },
+        )
     }
 }
 
@@ -176,3 +200,39 @@ private suspend fun writeExportFile(context: Context, uri: Uri, content: String)
     withContext(Dispatchers.IO) {
         context.contentResolver.openOutputStream(uri)?.use { it.write(content.toByteArray()) }
     }
+
+/**
+ * 查找替换对话框：查找/替换文本 + 正则/忽略大小写选项，全部替换（一次撤销点）。
+ *
+ * @author 伤感咩吖
+ */
+@Composable
+private fun FindReplaceDialog(
+    onDismiss: () -> Unit,
+    onReplace: (query: String, replacement: String, useRegex: Boolean, ignoreCase: Boolean) -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    var replacement by remember { mutableStateOf("") }
+    var useRegex by remember { mutableStateOf(false) }
+    var ignoreCase by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("查找替换") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("查找") }, singleLine = true)
+                OutlinedTextField(value = replacement, onValueChange = { replacement = it }, label = { Text("替换为") }, singleLine = true)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = useRegex, onCheckedChange = { useRegex = it })
+                    Text("正则")
+                    Checkbox(checked = ignoreCase, onCheckedChange = { ignoreCase = it })
+                    Text("忽略大小写")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onReplace(query, replacement, useRegex, ignoreCase) }) { Text("全部替换") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}

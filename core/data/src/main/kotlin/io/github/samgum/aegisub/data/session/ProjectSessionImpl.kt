@@ -97,6 +97,13 @@ internal class ProjectSessionImpl(
         commit(current.withEvents(newEvents))
     }
 
+    override fun editAllEvents(transform: (AssEvent) -> AssEvent) {
+        val s = stack ?: return
+        val current = s.current
+        val newEvents = current.events.map(transform).toPersistentList()
+        commit(current.withEvents(newEvents))
+    }
+
     private fun commit(newScript: AssScript) {
         val s = stack ?: return
         s.commit(newScript, "edit")

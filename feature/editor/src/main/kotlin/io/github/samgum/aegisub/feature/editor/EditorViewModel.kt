@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.samgum.aegisub.data.session.ProjectSessionManager
 import io.github.samgum.aegisub.domain.format.AssFormat
 import io.github.samgum.aegisub.domain.model.AssScript
+import io.github.samgum.aegisub.domain.text.FindReplace
 import io.github.samgum.aegisub.domain.time.SubTime
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -57,6 +58,13 @@ class EditorViewModel @Inject constructor(
 
     fun setEventLayer(eventId: Long, layer: Int) =
         session.editEvent(eventId) { it.copy(layer = layer) }
+
+    /** 全局查找替换所有事件的文本（一次撤销点）。 */
+    fun replaceAll(query: String, replacement: String, useRegex: Boolean, ignoreCase: Boolean) {
+        session.editAllEvents { e ->
+            e.copy(text = FindReplace.replaceAll(e.text, query, replacement, useRegex, ignoreCase))
+        }
+    }
 
     fun undo() = session.undo()
     fun redo() = session.redo()

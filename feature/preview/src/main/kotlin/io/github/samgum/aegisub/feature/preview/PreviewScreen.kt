@@ -134,10 +134,11 @@ fun PreviewScreen(
                             event.key == Key.DirectionLeft -> { viewModel.seekRelative(-5_000); true }
                             event.key == Key.DirectionRight -> { viewModel.seekRelative(5_000); true }
                             event.isCtrlPressed && event.key == Key.Z -> { viewModel.undo(); true }
+                            // 桌面端 Aegisub timing 热键约定：W 上行 / A 设起始 / S 设结束 / D 提交并下行
                             event.key == Key.W -> { viewModel.selectPrevEvent(); true }
-                            event.key == Key.S -> { viewModel.selectNextEvent(); true }
                             event.key == Key.A && selectedId != null -> { viewModel.setStartToPosition(selectedId); true }
-                            event.key == Key.D && selectedId != null -> { viewModel.setEndToPosition(selectedId); true }
+                            event.key == Key.S && selectedId != null -> { viewModel.setEndToPosition(selectedId); true }
+                            event.key == Key.D -> { viewModel.selectNextEvent(); true }
                             else -> false
                         }
                     }
