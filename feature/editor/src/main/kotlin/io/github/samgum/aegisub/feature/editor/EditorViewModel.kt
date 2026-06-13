@@ -9,6 +9,10 @@ import io.github.samgum.aegisub.data.settings.LayoutMode
 import io.github.samgum.aegisub.data.settings.SettingsRepository
 import io.github.samgum.aegisub.domain.format.AssFormat
 import io.github.samgum.aegisub.domain.format.WriteOptions
+import io.github.samgum.aegisub.domain.edit.DeleteEmpty
+import io.github.samgum.aegisub.domain.edit.ShiftTarget
+import io.github.samgum.aegisub.domain.edit.StyleReplace
+import io.github.samgum.aegisub.domain.edit.TimeShift
 import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.domain.text.FindReplace
 import io.github.samgum.aegisub.domain.time.SubTime
@@ -75,6 +79,27 @@ class EditorViewModel @Inject constructor(
         session.editAllEvents { e ->
             e.copy(text = FindReplace.replaceAll(e.text, query, replacement, useRegex, ignoreCase))
         }
+    }
+
+    /**
+     * 批量时间偏移（一次撤销点）。
+     * @param deltaMs 偏移量，正=后移，负=前移（越界自动钳零）
+     * @param target 平移起始/结束/两者
+     * @param fromStartMs 非空时仅平移 start ≥ 此值的事件；null=全部
+     */
+    fun shiftTimes(deltaMs: Long, target: ShiftTarget, fromStartMs: Long? = null) {
+        val fromStart = fromStartMs?.let { SubTime.ofMillis(it) }
+        session.editEvents { events -> TimeShift.apply(events, deltaMs, target, fromStart) }
+    }
+
+    /** 删除有效内容为空的事件（一次撤销点）。 */
+    fun deleteEmptyLines() {
+        session.editEvents { DeleteEmpty.apply(it) }
+    }
+
+    /** 批量替换事件样式名（一次撤销点）。from 为空则 no-op。 */
+    fun replaceStyles(fromStyle: String, toStyle: String) {
+        session.editEvents { StyleReplace.apply(it, fromStyle, toStyle) }
     }
 
     fun undo() = session.undo()

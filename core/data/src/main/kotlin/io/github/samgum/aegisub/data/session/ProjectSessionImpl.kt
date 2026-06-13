@@ -98,9 +98,13 @@ internal class ProjectSessionImpl(
     }
 
     override fun editAllEvents(transform: (AssEvent) -> AssEvent) {
+        editEvents { events -> events.map(transform) }
+    }
+
+    override fun editEvents(transform: (List<AssEvent>) -> List<AssEvent>) {
         val s = stack ?: return
         val current = s.current
-        val newEvents = current.events.map(transform).toPersistentList()
+        val newEvents = transform(current.events).toPersistentList()
         commit(current.withEvents(newEvents))
     }
 

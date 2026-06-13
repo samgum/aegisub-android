@@ -28,8 +28,11 @@ interface ProjectSession {
     /** 对指定 id 的事件应用变换，产出新不可变脚本并入撤销栈（触发防抖回写）。 */
     fun editEvent(eventId: Long, transform: (AssEvent) -> AssEvent)
 
-    /** 对所有事件应用变换，一次提交（一个撤销点，用于查找替换等批量编辑）。 */
+    /** 对所有事件逐条应用变换，一次提交（一个撤销点，用于查找替换等批量编辑）。 */
     fun editAllEvents(transform: (AssEvent) -> AssEvent)
+
+    /** 对整个事件列表应用任意变换（可增删、改顺序），一次提交（一个撤销点，用于删除空行/时间偏移等）。 */
+    fun editEvents(transform: (List<AssEvent>) -> List<AssEvent>)
 
     fun undo()
     fun redo()

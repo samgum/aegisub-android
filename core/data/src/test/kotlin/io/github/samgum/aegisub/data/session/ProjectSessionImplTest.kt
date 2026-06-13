@@ -117,6 +117,45 @@ class ProjectSessionImplTest {
         assertEquals(null, s.script.value)
     }
 
+    private val multiSample = """
+        [Script Info]
+        ScriptType: v4.00+
+
+        [V4+ Styles]
+        Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+        Style: Default,Arial,48,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,10,1
+
+        [Events]
+        Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+        Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Hello
+        Dialogue: 0,0:00:04.00,0:00:06.00,Default,,0,0,0,,
+        Dialogue: 0,0:00:07.00,0:00:09.00,Default,,0,0,0,,World
+    """.trimIndent()
+
+    @Test fun editEvents_filters_list_as_single_undo() = runTest(dispatcher) {
+        val s = session(FakeRepo(multiSample))
+        advanceUntilIdle()
+        assertEquals(3, s.script.value!!.events.size)
+        // 删除空行：列表级变换
+        s.editEvents { events -> events.filter { it.text.isNotBlank() } }
+        assertEquals(2, s.script.value!!.events.size)
+        assertTrue(s.canUndo.value)
+        // 单次撤销恢复全部
+        s.undo()
+        assertEquals(3, s.script.value!!.events.size)
+        assertFalse(s.canUndo.value)
+    }
+
+    @Test fun editAllEvents_maps_every_event_single_undo() = runTest(dispatcher) {
+        val s = session(FakeRepo(multiSample))
+        advanceUntilIdle()
+        // 批量改样式：逐条 map
+        s.editAllEvents { it.copy(style = "Title") }
+        s.script.value!!.events.forEach { assertEquals("Title", it.style) }
+        s.undo()
+        s.script.value!!.events.forEach { assertEquals("Default", it.style) }
+    }
+
     private class FakeRepo(
         private val content: String = "",
         private val throwOnGet: Boolean = false,

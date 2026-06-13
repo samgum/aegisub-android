@@ -4,26 +4,39 @@ import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +56,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.collections.immutable.toPersistentList
 import io.github.samgum.aegisub.data.settings.LayoutMode
+import io.github.samgum.aegisub.domain.edit.ShiftTarget
 import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.feature.editor.compact.EventEditSheet
@@ -53,9 +67,11 @@ import io.github.samgum.aegisub.feature.editor.expanded.EditorTwoPane
 /**
  * 编辑器入口屏：按 [EditorUiState] 分发，再按窗口宽度选 compact（列表+底栏）
  * 或 expanded（双栏列表|详情）布局。撤销/重做与编辑统一回写 [EditorViewModel]。
+ * 右下角工具箱 FAB 汇聚查找替换/时间偏移/删除空行/样式批量替换。
  *
  * @author 伤感咩吖
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(
     onBack: () -> Unit,
@@ -77,7 +93,11 @@ fun EditorScreen(
         }
     }
     val onExport = { exportLauncher.launch("字幕工程.ass") }
+    var showToolbox by remember { mutableStateOf(false) }
     var showFindReplace by remember { mutableStateOf(false) }
+    var showShiftTimes by remember { mutableStateOf(false) }
+    var showDeleteEmpty by remember { mutableStateOf(false) }
+    var showStyleReplace by remember { mutableStateOf(false) }
 
     when (val s = state) {
         EditorUiState.Loading ->
@@ -141,11 +161,21 @@ fun EditorScreen(
                     )
                 }
                 FloatingActionButton(
-                    onClick = { showFindReplace = true },
+                    onClick = { showToolbox = true },
                     modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-                ) { Icon(Icons.Filled.Search, contentDescription = "查找替换") }
+                ) { Icon(Icons.Filled.Build, contentDescription = "批量工具") }
             }
         }
+    }
+
+    if (showToolbox) {
+        ToolboxSheet(
+            onDismiss = { showToolbox = false },
+            onFindReplace = { showToolbox = false; showFindReplace = true },
+            onShiftTimes = { showToolbox = false; showShiftTimes = true },
+            onDeleteEmpty = { showToolbox = false; showDeleteEmpty = true },
+            onStyleReplace = { showToolbox = false; showStyleReplace = true },
+        )
     }
 
     if (showFindReplace) {
@@ -157,6 +187,51 @@ fun EditorScreen(
             },
         )
     }
+
+    if (showShiftTimes) {
+        ShiftTimesDialog(
+            onDismiss = { showShiftTimes = false },
+            onApply = { deltaMs, target, onlyAfterSelected ->
+                val fromStart = if (onlyAfterSelected) currentSelectedStart(state, editingId) else null
+                viewModel.shiftTimes(deltaMs, target, fromStart)
+                showShiftTimes = false
+            },
+        )
+    }
+
+    if (showDeleteEmpty) {
+        AlertDialog(
+            onDismissRequest = { showDeleteEmpty = false },
+            title = { Text("删除空行") },
+            text = { Text("删除所有「有效内容为空」的行（纯空、仅空白、仅覆盖标签）。绘图行保留。此操作可撤销。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteEmptyLines()
+                    showDeleteEmpty = false
+                }) { Text("删除") }
+            },
+            dismissButton = { TextButton(onClick = { showDeleteEmpty = false }) { Text("取消") } },
+        )
+    }
+
+    if (showStyleReplace) {
+        val styles = (state as? EditorUiState.Loaded)?.script?.styles?.map { it.name } ?: emptyList()
+        StyleReplaceDialog(
+            styles = styles,
+            onDismiss = { showStyleReplace = false },
+            onApply = { from, to ->
+                viewModel.replaceStyles(from, to)
+                showStyleReplace = false
+            },
+        )
+    }
+}
+
+/** 取当前选中行的起始毫秒（用于"仅平移选中及之后"）。无选中返回 null。 */
+private fun currentSelectedStart(state: EditorUiState, editingId: Long?): Long? {
+    val loaded = state as? EditorUiState.Loaded ?: return null
+    val ev = loaded.script.events.firstOrNull { it.id == editingId } ?: return null
+    return ev.start.millis
 }
 
 @Composable
@@ -242,4 +317,164 @@ private fun FindReplaceDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
+}
+
+/**
+ * 工具箱底部弹层：列出批量操作入口。每项点击后关闭本层并打开对应弹层。
+ *
+ * @author 伤感咩吖
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ToolboxSheet(
+    onDismiss: () -> Unit,
+    onFindReplace: () -> Unit,
+    onShiftTimes: () -> Unit,
+    onDeleteEmpty: () -> Unit,
+    onStyleReplace: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Text(
+            "批量工具",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp),
+        )
+        LazyColumn(modifier = Modifier.fillMaxWidth()) {
+            item {
+                ToolEntry(Icons.Filled.Search, "查找替换", "正则 / 忽略大小写，全部替换（一次撤销）") { onFindReplace() }
+            }
+            item {
+                ToolEntry(Icons.AutoMirrored.Filled.ArrowForward, "时间偏移", "整体前移/后移，可仅作用于选中行之后") { onShiftTimes() }
+            }
+            item {
+                ToolEntry(Icons.Filled.Delete, "删除空行", "移除纯空 / 仅标签的行，保留绘图行") { onDeleteEmpty() }
+            }
+            item {
+                ToolEntry(Icons.Filled.Edit, "样式批量替换", "把指定样式名的事件改为另一样式") { onStyleReplace() }
+            }
+            item { HorizontalDivider() }
+        }
+    }
+}
+
+@Composable
+private fun ToolEntry(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    ListItem(
+        leadingContent = { Icon(icon, contentDescription = null) },
+        headlineContent = { Text(title) },
+        supportingContent = { Text(subtitle, style = MaterialTheme.typography.bodySmall) },
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+    )
+}
+
+/**
+ * 时间偏移对话框：输入毫秒偏移 + 作用对象（两者/起始/结束）+ 仅选中行之后。
+ *
+ * @author 伤感咩吖
+ */
+@Composable
+private fun ShiftTimesDialog(
+    onDismiss: () -> Unit,
+    onApply: (deltaMs: Long, target: ShiftTarget, onlyAfterSelected: Boolean) -> Unit,
+) {
+    var deltaText by remember { mutableStateOf("0") }
+    var target by remember { mutableStateOf(ShiftTarget.BOTH) }
+    var onlyAfter by remember { mutableStateOf(false) }
+    val delta = deltaText.toLongOrNull() ?: 0L
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("时间偏移") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = deltaText,
+                    onValueChange = { deltaText = it.filter { ch -> ch.isDigit() || ch == '-' } },
+                    label = { Text("偏移（毫秒，负=前移）") },
+                    singleLine = true,
+                )
+                Text("作用对象", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    FilterChip(selected = target == ShiftTarget.BOTH, onClick = { target = ShiftTarget.BOTH }, label = { Text("起止") })
+                    FilterChip(selected = target == ShiftTarget.START, onClick = { target = ShiftTarget.START }, label = { Text("仅起始") })
+                    FilterChip(selected = target == ShiftTarget.END, onClick = { target = ShiftTarget.END }, label = { Text("仅结束") })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = onlyAfter, onCheckedChange = { onlyAfter = it })
+                    Text("仅作用于当前选中行及之后")
+                }
+                Text(
+                    if (delta >= 0) "整体后移 ${delta}ms" else "整体前移 ${-delta}ms（越界自动钳零）",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onApply(delta, target, onlyAfter) }) { Text("应用") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+/**
+ * 样式批量替换对话框：从已有样式名选源/目标，替换（一次撤销点）。
+ *
+ * @author 伤感咩吖
+ */
+@Composable
+private fun StyleReplaceDialog(
+    styles: List<String>,
+    onDismiss: () -> Unit,
+    onApply: (fromStyle: String, toStyle: String) -> Unit,
+) {
+    val distinct = styles.distinct()
+    var from by remember { mutableStateOf(distinct.firstOrNull() ?: "") }
+    var to by remember { mutableStateOf(distinct.firstOrNull() ?: "") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("样式批量替换") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("把所有「${if (from.isEmpty()) "（空）" else from}」样式的事件改为另一样式。", style = MaterialTheme.typography.bodySmall)
+                StyleDropdown("原样式", distinct, from) { from = it }
+                StyleDropdown("新样式", distinct, to) { to = it }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onApply(from, to) }, enabled = from.isNotEmpty()) { Text("替换") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StyleDropdown(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = selected,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            trailingIcon = {
+                IconButton(onClick = { expanded = true }) { Text("▾") }
+            },
+        )
+        androidx.compose.material3.DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { name ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(name) },
+                    onClick = { onSelect(name); expanded = false },
+                )
+            }
+        }
+    }
 }
