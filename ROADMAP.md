@@ -2,7 +2,7 @@
 
 > 滚动更新。每完成一个 Phase 提交 Commit 并更新本文件与 README。
 
-## 当前状态：✅ Phase 0 完成 + Phase 1 核心完成（应用外壳 + Room + Hilt + 项目列表 UI，可出 debug APK）。剩余 Phase 1：DataStore 设置 / 自动保存；下一步 Phase 2（字幕编辑 UI）。
+## 当前状态：✅ Phase 0 / 1 / 2 完成。字幕编辑闭环可用（加载 → 列表 → 编辑文本/时间/样式/层 → 撤销重做 → 防抖回写 Room；compact 列表+底栏 / expanded 双栏按屏宽自适应）。剩余 Phase 1：DataStore 设置；下一步 Phase 3（视频预览）。
 
 ---
 
@@ -25,14 +25,16 @@
 - [x] Hilt DI 接线 + 应用入口（`@HiltAndroidApp` + `DataModule`）
 - [x] 项目列表 UI（LazyColumn + 新建 FAB，`assembleDebug` 出 9.7M APK）
 - [ ] DataStore：用户偏好（默认精度、布局、主题）— 待办
-- [ ] 自动保存调度（Coroutines + WorkManager）— 待办
+- [x] 编辑防抖自动保存（Coroutines Flow debounce，Phase 2 落地）；WorkManager 后台保命保存 — 待办
 - [ ] 历史版本表 — 待办（Phase 7 深化）
 
-## Phase 2 · 字幕编辑 UI
-- [ ] Compose 字幕列表（`LazyColumn` 虚拟列表，目标 10 万行流畅）
-- [ ] 事件编辑器（时间 / 样式 / 文本 / 演员 / 特效）
-- [ ] 响应式布局：手机竖屏、平板四区、折叠屏、DeX、Desktop Mode
-- [ ] 外接键盘 / 鼠标快捷键
+## Phase 2 · 字幕编辑 UI ✅（核心闭环）
+- [x] Compose 字幕列表（`LazyColumn` 虚拟列表 + 稳定 key，目标 10 万行流畅）
+- [x] 事件编辑器：文本 / 起止时间 / 样式 / 层（实时回写 + 容错解析）；演员/特效字段留待样式深化
+- [x] 撤销 / 重做（CoW 快照栈）+ 防抖自动保存（800ms 回写 Room，跳过首版本）
+- [x] 响应式布局：compact（列表 + ModalBottomSheet 编辑底栏）/ expanded（双栏列表|详情常驻），按屏宽断点分派
+- [ ] 折叠屏 / DeX / Desktop Mode 实测适配 — 待办
+- [ ] 外接键盘 / 鼠标快捷键 — 待办
 
 ## Phase 3 · 视频预览与时间轴
 - [ ] Media3 / ExoPlayer 集成 + 倍速播放
