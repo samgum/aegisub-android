@@ -617,9 +617,6 @@ Expected: FAIL（`ProjectSessionManager` 未解析）
 package io.github.samgum.aegisub.data.session
 
 import io.github.samgum.aegisub.data.repository.ProjectRepository
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -633,14 +630,12 @@ import javax.inject.Singleton
 class ProjectSessionManager @Inject constructor(
     private val repo: ProjectRepository,
 ) {
-    // session 内部协程跑在此 scope（Main dispatcher，测试可由 Dispatchers.setMain 替换）
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val sessions = mutableMapOf<Long, ProjectSession>()
 
     /** 返回（或创建并启动）projectId 对应的共享会话。线程安全。 */
     fun open(projectId: Long): ProjectSession = synchronized(sessions) {
         sessions.getOrPut(projectId) {
-            ProjectSessionImpl(projectId, repo, scope).also { it.start() }
+            ProjectSessionImpl(projectId, repo).also { it.start() }
         }
     }
 }
