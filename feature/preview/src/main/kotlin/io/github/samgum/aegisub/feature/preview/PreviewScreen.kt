@@ -63,8 +63,7 @@ import io.github.samgum.aegisub.domain.time.SubTime
 import io.github.samgum.aegisub.feature.preview.components.NudgeTarget
 import io.github.samgum.aegisub.feature.preview.components.PlayerSurface
 import io.github.samgum.aegisub.feature.preview.components.SubtitleOverlay
-import io.github.samgum.aegisub.feature.preview.components.TimelineBar
-import io.github.samgum.aegisub.feature.preview.components.WaveformCanvas
+import io.github.samgum.aegisub.feature.preview.components.AudioTimeline
 import io.github.samgum.aegisub.feature.preview.components.TimingEditPanel
 
 /**
@@ -200,12 +199,8 @@ private fun VideoBlock(
             onSpeedChange = viewModel::setSpeed,
         )
         val waveform by viewModel.waveform.collectAsStateWithLifecycle()
-        WaveformCanvas(
+        AudioTimeline(
             waveform = waveform,
-            positionMs = state.playback.positionMs,
-            durationMs = state.playback.durationMs,
-        )
-        TimelineBar(
             events = state.script.events,
             selectedEventId = state.selectedEventId,
             positionMs = state.playback.positionMs,
