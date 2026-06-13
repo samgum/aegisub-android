@@ -21,6 +21,7 @@ import io.github.samgum.aegisub.domain.edit.SortKey
 import io.github.samgum.aegisub.domain.edit.SortLines
 import io.github.samgum.aegisub.domain.edit.SortOrder
 import io.github.samgum.aegisub.domain.edit.ScriptInfoOps
+import io.github.samgum.aegisub.domain.edit.SelectionOps
 import io.github.samgum.aegisub.domain.edit.StyleReplace
 import io.github.samgum.aegisub.domain.edit.TimeShift
 import io.github.samgum.aegisub.domain.model.AssScript
@@ -118,10 +119,26 @@ class EditorViewModel @Inject constructor(
      * @param deltaMs 偏移量，正=后移，负=前移（越界自动钳零）
      * @param target 平移起始/结束/两者
      * @param fromStartMs 非空时仅平移 start ≥ 此值的事件；null=全部
+     * @param selectedIds 非空时仅作用于命中行（多选批量）
      */
-    fun shiftTimes(deltaMs: Long, target: ShiftTarget, fromStartMs: Long? = null) {
+    fun shiftTimes(
+        deltaMs: Long,
+        target: ShiftTarget,
+        fromStartMs: Long? = null,
+        selectedIds: Set<Long> = emptySet(),
+    ) {
         val fromStart = fromStartMs?.let { SubTime.ofMillis(it) }
-        session.editEvents { events -> TimeShift.apply(events, deltaMs, target, fromStart) }
+        session.editEvents { events ->
+            if (selectedIds.isEmpty()) {
+                TimeShift.apply(events, deltaMs, target, fromStart)
+            } else {
+                events.map { e ->
+                    if (e.id !in selectedIds) e
+                    else if (fromStart != null && e.start < fromStart) e
+                    else TimeShift.apply(listOf(e), deltaMs, target, fromStart).first()
+                }
+            }
+        }
     }
 
     /** 删除有效内容为空的事件（一次撤销点）。 */
@@ -129,9 +146,20 @@ class EditorViewModel @Inject constructor(
         session.editEvents { DeleteEmpty.apply(it) }
     }
 
-    /** 批量替换事件样式名（一次撤销点）。from 为空则 no-op。 */
-    fun replaceStyles(fromStyle: String, toStyle: String) {
-        session.editEvents { StyleReplace.apply(it, fromStyle, toStyle) }
+    /**
+     * 批量替换事件样式名（一次撤销点）。from 为空则 no-op。
+     * @param selectedIds 非空时仅作用于命中行（多选批量）
+     */
+    fun replaceStyles(fromStyle: String, toStyle: String, selectedIds: Set<Long> = emptySet()) {
+        session.editEvents { events ->
+            if (selectedIds.isEmpty()) {
+                StyleReplace.apply(events, fromStyle, toStyle)
+            } else {
+                events.map { e ->
+                    if (e.id !in selectedIds || e.style != fromStyle) e else e.copy(style = toStyle)
+                }
+            }
+        }
     }
 
     // ---------- 行级操作（复制/删除/插入/分割/合并/上下移，每次一个撤销点）----------
@@ -184,6 +212,30 @@ class EditorViewModel @Inject constructor(
 
     fun undo() = session.undo()
     fun redo() = session.redo()
+
+    // ---------- 多选批量（作用于 id 集合，单撤销点）----------
+
+    /** 删除 id 命中的事件。 */
+    fun deleteSelected(ids: Set<Long>) {
+        session.editEvents { SelectionOps.deleteByIds(it, ids) }
+    }
+
+    /** 复制 id 命中的事件（副本紧跟原行后）。 */
+    fun duplicateSelected(ids: Set<Long>) {
+        session.editEvents { SelectionOps.duplicateByIds(it, ids) }
+    }
+
+    /** 连续选中块整体上移一行。 */
+    fun moveSelectedUp(ids: Set<Long>) {
+        session.editEvents { SelectionOps.moveUpByIds(it, ids) }
+    }
+
+    /** 连续选中块整体下移一行。 */
+    fun moveSelectedDown(ids: Set<Long>) {
+        session.editEvents { SelectionOps.moveDownByIds(it, ids) }
+    }
+
+    // 注：时间偏移与样式批量替换已支持 selectedIds 参数（见上方 shiftTimes/replaceStyles）。
 
     // ---------- 历史版本恢复 ----------
 

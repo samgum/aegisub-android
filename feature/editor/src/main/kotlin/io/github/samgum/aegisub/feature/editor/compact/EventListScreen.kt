@@ -37,12 +37,22 @@ fun EventListScreen(
     onEventClick: (AssEvent) -> Unit,
     onBack: () -> Unit,
     title: String = "字幕列表",
+    selectionMode: Boolean = false,
+    selectedIds: Set<Long> = emptySet(),
+    onToggleSelect: (Long) -> Unit = {},
+    onEnterSelection: (Long) -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                title = {
+                    Text(
+                        if (selectionMode) "已选 ${selectedIds.size} 行" else title,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -73,7 +83,15 @@ fun EventListScreen(
             ) {
                 // key 用稳定唯一 id（EditorViewModel.load 已按行序分配）
                 itemsIndexed(events, key = { _, it -> it.id }) { index, event ->
-                    EventRow(event = event, index = index, onClick = { onEventClick(event) })
+                    EventRow(
+                        event = event,
+                        index = index,
+                        onClick = { onEventClick(event) },
+                        selectionMode = selectionMode,
+                        isSelected = event.id in selectedIds,
+                        onToggleSelect = { onToggleSelect(event.id) },
+                        onLongClick = { onEnterSelection(event.id) },
+                    )
                 }
             }
         }

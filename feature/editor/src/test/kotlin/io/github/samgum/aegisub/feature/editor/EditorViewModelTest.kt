@@ -10,6 +10,7 @@ import io.github.samgum.aegisub.data.settings.LayoutMode
 import io.github.samgum.aegisub.data.settings.SettingsRepository
 import io.github.samgum.aegisub.data.settings.ThemeMode
 import io.github.samgum.aegisub.data.settings.UserSettings
+import io.github.samgum.aegisub.domain.edit.ShiftTarget
 import io.github.samgum.aegisub.domain.format.TimePrecision
 import io.github.samgum.aegisub.domain.time.SubTime
 import io.github.samgum.aegisub.feature.editor.components.LineAction
@@ -283,6 +284,48 @@ class EditorViewModelTest {
         v.undo()
         assertEquals("Hello", v.currentScript()!!.events[0].text)
         assertEquals("", v.currentScript()!!.events[0].actor)
+    }
+
+    // ---------- 多选批量（SelectionOps 经 session.editEvents）----------
+
+    @Test fun delete_selected_removes_matching_ids() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE_MULTI)
+        advanceUntilIdle()
+        val first = v.currentScript()!!.events.first().id
+        v.deleteSelected(setOf(first))
+        assertEquals(1, v.currentScript()!!.events.size)
+        v.undo()
+        assertEquals(2, v.currentScript()!!.events.size)
+    }
+
+    @Test fun duplicate_selected_copies_each() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE_MULTI)
+        advanceUntilIdle()
+        val first = v.currentScript()!!.events.first().id
+        v.duplicateSelected(setOf(first))
+        assertEquals(3, v.currentScript()!!.events.size)
+        // 副本紧跟其后
+        assertEquals("Hello", v.currentScript()!!.events[1].text)
+    }
+
+    @Test fun move_selected_up_swaps_block() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE_MULTI)
+        advanceUntilIdle()
+        val second = v.currentScript()!!.events[1].id
+        v.moveSelectedUp(setOf(second))
+        assertEquals(second, v.currentScript()!!.events[0].id)
+    }
+
+    @Test fun shift_times_scoped_to_selected() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE_MULTI)
+        advanceUntilIdle()
+        val events = v.currentScript()!!.events
+        val firstId = events[0].id
+        val secondStartBefore = events[1].start.millis
+        v.shiftTimes(1_000, ShiftTarget.BOTH, selectedIds = setOf(firstId))
+        val after = v.currentScript()!!.events
+        assertEquals(1_000L + 1_000L, after[0].start.millis) // 1s+1s=2s
+        assertEquals(secondStartBefore, after[1].start.millis) // 未选中不变
     }
 
     // ---------- 历史版本恢复 ----------

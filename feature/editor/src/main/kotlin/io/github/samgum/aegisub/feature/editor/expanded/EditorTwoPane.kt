@@ -52,6 +52,10 @@ fun EditorTwoPane(
     onStyleChanged: (eventId: Long, style: String) -> Unit,
     onLayerChanged: (eventId: Long, layer: Int) -> Unit,
     onLineAction: (eventId: Long, LineAction) -> Unit,
+    selectionMode: Boolean = false,
+    selectedIds: Set<Long> = emptySet(),
+    onToggleSelect: (Long) -> Unit = {},
+    onEnterSelection: (Long) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -76,7 +80,15 @@ fun EditorTwoPane(
             // 左：字幕列表
             LazyColumn(modifier = Modifier.weight(0.4f)) {
                 itemsIndexed(script.events, key = { _, it -> it.id }) { index, ev ->
-                    EventRow(event = ev, index = index, onClick = { onEventClick(ev) })
+                    EventRow(
+                        event = ev,
+                        index = index,
+                        onClick = { onEventClick(ev) },
+                        selectionMode = selectionMode,
+                        isSelected = ev.id in selectedIds,
+                        onToggleSelect = { onToggleSelect(ev.id) },
+                        onLongClick = { onEnterSelection(ev.id) },
+                    )
                 }
             }
             // 右：选中事件详情常驻

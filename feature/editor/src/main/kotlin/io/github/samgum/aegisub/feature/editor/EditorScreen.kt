@@ -80,6 +80,7 @@ import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.feature.editor.compact.EventEditSheet
 import io.github.samgum.aegisub.feature.editor.compact.EventListScreen
 import io.github.samgum.aegisub.feature.editor.components.EditorActions
+import io.github.samgum.aegisub.feature.editor.components.SelectionActionBar
 import io.github.samgum.aegisub.feature.editor.components.StylingAssistantSheet
 import io.github.samgum.aegisub.feature.editor.components.TranslationAssistantSheet
 import io.github.samgum.aegisub.feature.editor.expanded.EditorTwoPane
@@ -105,6 +106,13 @@ fun EditorScreen(
     val layoutMode by viewModel.layoutMode.collectAsStateWithLifecycle()
     val snapshots by viewModel.snapshotList.collectAsStateWithLifecycle()
     var editingId by remember { mutableStateOf<Long?>(null) }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    fun exitSelection() { selectionMode = false; selectedIds = emptySet() }
+    fun enterSelection(id: Long) { selectionMode = true; selectedIds = setOf(id) }
+    fun toggleSelect(id: Long) {
+        selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
+    }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val exportLauncher = rememberLauncherForActivityResult(
@@ -164,19 +172,23 @@ fun EditorScreen(
                         editingId = editingId,
                         onEventClick = { editingId = it.id },
                         onDismissEdit = { editingId = null },
-                        onBack = onBack,
+                        onBack = { if (selectionMode) exitSelection() else onBack() },
                         onOpenPreview = { onOpenPreview(viewModel.projectId) },
                         onExport = onExport,
                         canUndo = canUndo,
                         canRedo = canRedo,
                         viewModel = viewModel,
+                        selectionMode = selectionMode,
+                        selectedIds = selectedIds,
+                        onToggleSelect = ::toggleSelect,
+                        onEnterSelection = ::enterSelection,
                     )
                 } else {
                     EditorTwoPane(
                         script = s.script,
                         editingId = editingId,
                         onEventClick = { editingId = it.id },
-                        onBack = onBack,
+                        onBack = { if (selectionMode) exitSelection() else onBack() },
                         onOpenPreview = { onOpenPreview(viewModel.projectId) },
                         onExport = onExport,
                         canUndo = canUndo,
@@ -188,6 +200,32 @@ fun EditorScreen(
                         onStyleChanged = viewModel::updateEventStyle,
                         onLayerChanged = viewModel::setEventLayer,
                         onLineAction = viewModel::applyLineAction,
+                        selectionMode = selectionMode,
+                        selectedIds = selectedIds,
+                        onToggleSelect = ::toggleSelect,
+                        onEnterSelection = ::enterSelection,
+                    )
+                }
+                if (selectionMode) {
+                    SelectionActionBar(
+                        count = selectedIds.size,
+                        total = s.script.events.size,
+                        onMoveUp = {
+                            viewModel.moveSelectedUp(selectedIds)
+                            // 移动后 id 集合不变（事件身份随 id 走）
+                        },
+                        onMoveDown = { viewModel.moveSelectedDown(selectedIds) },
+                        onDuplicate = {
+                            viewModel.duplicateSelected(selectedIds)
+                            exitSelection()
+                        },
+                        onDelete = {
+                            viewModel.deleteSelected(selectedIds)
+                            exitSelection()
+                        },
+                        onSelectAll = { selectedIds = s.script.events.map { it.id }.toSet() },
+                        onCancel = ::exitSelection,
+                        modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 }
                 FloatingActionButton(
@@ -394,11 +432,19 @@ private fun CompactEditor(
     canUndo: Boolean,
     canRedo: Boolean,
     viewModel: EditorViewModel,
+    selectionMode: Boolean = false,
+    selectedIds: Set<Long> = emptySet(),
+    onToggleSelect: (Long) -> Unit = {},
+    onEnterSelection: (Long) -> Unit = {},
 ) {
     EventListScreen(
         events = script.events,
         onEventClick = onEventClick,
         onBack = onBack,
+        selectionMode = selectionMode,
+        selectedIds = selectedIds,
+        onToggleSelect = onToggleSelect,
+        onEnterSelection = onEnterSelection,
         actions = {
             IconButton(onClick = onOpenPreview) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = "预览")
