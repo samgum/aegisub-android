@@ -19,6 +19,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -126,11 +128,16 @@ fun PreviewScreen(
                     if (event.type != KeyEventType.KeyDown) {
                         false
                     } else {
+                        val selectedId = (state as? PreviewUiState.Loaded)?.selectedEventId
                         when {
                             event.key == Key.Spacebar -> { viewModel.playPause(); true }
                             event.key == Key.DirectionLeft -> { viewModel.seekRelative(-5_000); true }
                             event.key == Key.DirectionRight -> { viewModel.seekRelative(5_000); true }
                             event.isCtrlPressed && event.key == Key.Z -> { viewModel.undo(); true }
+                            event.key == Key.W -> { viewModel.selectPrevEvent(); true }
+                            event.key == Key.S -> { viewModel.selectNextEvent(); true }
+                            event.key == Key.A && selectedId != null -> { viewModel.setStartToPosition(selectedId); true }
+                            event.key == Key.D && selectedId != null -> { viewModel.setEndToPosition(selectedId); true }
                             else -> false
                         }
                     }
@@ -275,6 +282,7 @@ private fun CompactPreview(
     Column(Modifier.fillMaxSize()) {
         VideoBlock(state = state, viewModel = viewModel, onPickVideo = onPickVideo)
         if (state.selectedEventId != null) {
+            TimingToolbar(state = state, viewModel = viewModel)
             TimingEditLayer(state = state, viewModel = viewModel)
         }
         EventListColumn(
@@ -388,6 +396,30 @@ private fun TimingEditLayer(state: PreviewUiState.Loaded, viewModel: PreviewView
             }
         },
     )
+}
+
+/**
+ * 打轴工具栏（选中行时显示）：设起始/结束 = 当前播放位置 + 上下行导航。
+ * 配合播放做踩点打轴——听到台词起止时点对应按钮。
+ *
+ * @author 伤感咩吖
+ */
+@Composable
+private fun TimingToolbar(state: PreviewUiState.Loaded, viewModel: PreviewViewModel) {
+    val id = state.selectedEventId ?: return
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = viewModel::selectPrevEvent) {
+            Icon(Icons.Filled.SkipPrevious, contentDescription = "上一行")
+        }
+        Button(onClick = { viewModel.setStartToPosition(id) }) { Text("设起始") }
+        Button(onClick = { viewModel.setEndToPosition(id) }) { Text("设结束") }
+        IconButton(onClick = viewModel::selectNextEvent) {
+            Icon(Icons.Filled.SkipNext, contentDescription = "下一行")
+        }
+    }
 }
 
 /** ms → "M:SS" 或 "H:MM:SS"。 */

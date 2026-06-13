@@ -172,6 +172,34 @@ class PreviewViewModel @Inject constructor(
         editEventTimes(id, event.start, SubTime.ofMillis(event.end.millis + deltaMs))
     }
 
+    /** 把指定行的起始设为当前播放位置（踩点打轴）。 */
+    fun setStartToPosition(eventId: Long) {
+        val pos = player.state.value.positionMs
+        val event = session.script.value?.events?.firstOrNull { it.id == eventId } ?: return
+        editEventTimes(eventId, SubTime.ofMillis(pos), event.end)
+    }
+
+    /** 把指定行的结束设为当前播放位置（踩点打轴）。 */
+    fun setEndToPosition(eventId: Long) {
+        val pos = player.state.value.positionMs
+        val event = session.script.value?.events?.firstOrNull { it.id == eventId } ?: return
+        editEventTimes(eventId, event.start, SubTime.ofMillis(pos))
+    }
+
+    /** 选中上一行（并 seek 到其起始）。 */
+    fun selectPrevEvent() {
+        val script = session.script.value ?: return
+        val idx = script.events.indexOfFirst { it.id == _selectedEventId.value }
+        if (idx > 0) selectEvent(script.events[idx - 1].id)
+    }
+
+    /** 选中下一行（并 seek 到其起始）。 */
+    fun selectNextEvent() {
+        val script = session.script.value ?: return
+        val idx = script.events.indexOfFirst { it.id == _selectedEventId.value }
+        if (idx in 0 until script.events.lastIndex) selectEvent(script.events[idx + 1].id)
+    }
+
     fun attachMedia(uri: String) {
         viewModelScope.launch {
             repo.setMediaUri(projectId, uri)
