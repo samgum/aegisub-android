@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -76,6 +77,7 @@ import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.feature.editor.compact.EventEditSheet
 import io.github.samgum.aegisub.feature.editor.compact.EventListScreen
 import io.github.samgum.aegisub.feature.editor.components.EditorActions
+import io.github.samgum.aegisub.feature.editor.components.StylingAssistantSheet
 import io.github.samgum.aegisub.feature.editor.expanded.EditorTwoPane
 
 /**
@@ -118,6 +120,7 @@ fun EditorScreen(
     var showSort by remember { mutableStateOf(false) }
     var showFramerate by remember { mutableStateOf(false) }
     var showProperties by remember { mutableStateOf(false) }
+    var showStyling by remember { mutableStateOf(false) }
 
     when (val s = state) {
         EditorUiState.Loading ->
@@ -197,6 +200,7 @@ fun EditorScreen(
             onSort = { showToolbox = false; showSort = true },
             onFramerate = { showToolbox = false; showFramerate = true },
             onProperties = { showToolbox = false; showProperties = true },
+            onStyling = { showToolbox = false; showStyling = true },
             onDeleteEmpty = { showToolbox = false; showDeleteEmpty = true },
             onStyleReplace = { showToolbox = false; showStyleReplace = true },
             onOpenStyleManager = { showToolbox = false; onOpenStyles(viewModel.projectId) },
@@ -282,6 +286,30 @@ fun EditorScreen(
                     viewModel.applyScriptInfo(changes)
                     showProperties = false
                 },
+            )
+        }
+    }
+
+    if (showStyling) {
+        val loaded = state as? EditorUiState.Loaded
+        val events = loaded?.script?.events
+        if (loaded != null && events != null && events.isNotEmpty()) {
+            val currentId = editingId ?: events.first().id
+            val pos = events.indexOfFirst { it.id == currentId }.let { if (it < 0) 0 else it }
+            val ev = events[pos]
+            StylingAssistantSheet(
+                event = ev,
+                position = pos,
+                total = events.size,
+                styles = loaded.script.styles,
+                onAssign = { style ->
+                    viewModel.updateEventStyle(ev.id, style)
+                    // 应用后自动前进到下一行
+                    if (pos + 1 < events.size) editingId = events[pos + 1].id
+                },
+                onPrev = { if (pos > 0) editingId = events[pos - 1].id },
+                onNext = { if (pos + 1 < events.size) editingId = events[pos + 1].id },
+                onDismiss = { showStyling = false },
             )
         }
     }
@@ -409,6 +437,7 @@ private fun ToolboxSheet(
     onSort: () -> Unit,
     onFramerate: () -> Unit,
     onProperties: () -> Unit,
+    onStyling: () -> Unit,
     onDeleteEmpty: () -> Unit,
     onStyleReplace: () -> Unit,
     onOpenStyleManager: () -> Unit,
@@ -445,6 +474,9 @@ private fun ToolboxSheet(
             }
             item {
                 ToolEntry(Icons.Filled.Build, "样式管理器", "编辑颜色 / 字体 / 描边 / 对齐 / 边距 / 编码") { onOpenStyleManager() }
+            }
+            item {
+                ToolEntry(Icons.Filled.Palette, "样式助手", "逐行浏览字幕，点选样式快速分配并自动前进") { onStyling() }
             }
             item {
                 ToolEntry(Icons.Filled.PlayArrow, "历史版本", "保存当前为快照 / 恢复到过往版本（可撤销）") { onOpenHistory() }
