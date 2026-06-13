@@ -76,6 +76,10 @@ import io.github.samgum.aegisub.domain.edit.ScriptInfoOps
 import io.github.samgum.aegisub.domain.edit.ShiftTarget
 import io.github.samgum.aegisub.domain.edit.SortKey
 import io.github.samgum.aegisub.domain.edit.SortOrder
+import io.github.samgum.aegisub.domain.format.AssFormat
+import io.github.samgum.aegisub.domain.format.SrtFormat
+import io.github.samgum.aegisub.domain.format.SubtitleFormat
+import io.github.samgum.aegisub.domain.format.VttFormat
 import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.model.AssInfo
 import io.github.samgum.aegisub.domain.model.AssScript
@@ -117,14 +121,18 @@ fun EditorScreen(
     }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var pendingExportFormat by remember { mutableStateOf<SubtitleFormat?>(null) }
+    var showExportFormat by remember { mutableStateOf(false) }
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream"),
     ) { uri ->
-        if (uri != null) {
-            scope.launch { writeExportFile(context, uri, viewModel.exportContent()) }
+        val fmt = pendingExportFormat
+        pendingExportFormat = null
+        if (uri != null && fmt != null) {
+            scope.launch { writeExportFile(context, uri, viewModel.exportAs(fmt)) }
         }
     }
-    val onExport = { exportLauncher.launch("字幕工程.ass") }
+    val onExport = { showExportFormat = true }
     var showToolbox by remember { mutableStateOf(false) }
     var showFindReplace by remember { mutableStateOf(false) }
     var showShiftTimes by remember { mutableStateOf(false) }
@@ -422,6 +430,17 @@ fun EditorScreen(
             onApply = { toW, toH, scalePos, scaleBorders ->
                 viewModel.resampleResolution(fromW, fromH, toW, toH, scalePos, scaleBorders)
                 showResample = false
+            },
+        )
+    }
+
+    if (showExportFormat) {
+        ExportFormatDialog(
+            onDismiss = { showExportFormat = false },
+            onPick = { fmt ->
+                showExportFormat = false
+                pendingExportFormat = fmt
+                exportLauncher.launch("字幕工程${fmt.extensions.first()}")
             },
         )
     }
@@ -968,6 +987,40 @@ private fun PropertiesSheet(
             }
         }
     }
+}
+
+/**
+ * 导出格式选择器：ASS / SRT / WebVTT。选定后触发 SAF CreateDocument。
+ *
+ * @author 伤感咩吖
+ */
+@Composable
+private fun ExportFormatDialog(
+    onDismiss: () -> Unit,
+    onPick: (SubtitleFormat) -> Unit,
+) {
+    val formats = listOf(
+        Triple(AssFormat, "ASS", "完整样式/标签，ASS 厘秒或毫秒精度"),
+        Triple(SrtFormat, "SRT", "剥离标签的纯文本字幕"),
+        Triple(VttFormat, "WebVTT (VTT)", "剥离标签，Web 视频 HTML5 字幕"),
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("导出格式") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                formats.forEach { (fmt, label, desc) ->
+                    ListItem(
+                        headlineContent = { Text(label) },
+                        supportingContent = { Text(desc, style = MaterialTheme.typography.bodySmall) },
+                        modifier = Modifier.clickable { onPick(fmt) },
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }
 
 /**

@@ -10,6 +10,7 @@ import io.github.samgum.aegisub.data.session.ProjectSessionManager
 import io.github.samgum.aegisub.data.settings.LayoutMode
 import io.github.samgum.aegisub.data.settings.SettingsRepository
 import io.github.samgum.aegisub.domain.format.AssFormat
+import io.github.samgum.aegisub.domain.format.SubtitleFormat
 import io.github.samgum.aegisub.domain.format.WriteOptions
 import io.github.samgum.aegisub.domain.edit.DeleteEmpty
 import io.github.samgum.aegisub.domain.edit.FramerateConverter
@@ -293,11 +294,11 @@ class EditorViewModel @Inject constructor(
     }
 
     /**
-     * 导出当前脚本为 ASS 文本。读取用户设置的导出精度（厘秒/毫秒/自动），
-     * 无脚本时返回空串。
+     * 导出当前脚本为指定格式文本。读取用户设置的导出精度（厘秒/毫秒/自动），
+     * 无脚本时返回空串。SRT/VTT/LRC 会自动剥离覆盖标签。
      */
-    suspend fun exportContent(): String {
+    suspend fun exportAs(format: SubtitleFormat): String {
         val precision = settings.settings.first().exportPrecision
-        return session.script.value?.let { AssFormat.write(it, WriteOptions(timePrecision = precision)) } ?: ""
+        return session.script.value?.let { format.write(it, WriteOptions(timePrecision = precision)) } ?: ""
     }
 }

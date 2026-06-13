@@ -7,7 +7,7 @@ package io.github.samgum.aegisub.domain.format
  */
 object FormatRegistry {
     val formats: List<SubtitleFormat> = listOf(
-        AssFormat, SsaFormat, SrtFormat, LrcFormat, TxtFormat,
+        AssFormat, SsaFormat, SrtFormat, VttFormat, LrcFormat, TxtFormat,
     )
 
     fun byName(name: String): SubtitleFormat? = formats.firstOrNull { it.name == name }

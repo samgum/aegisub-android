@@ -11,7 +11,10 @@ import io.github.samgum.aegisub.data.settings.SettingsRepository
 import io.github.samgum.aegisub.data.settings.ThemeMode
 import io.github.samgum.aegisub.data.settings.UserSettings
 import io.github.samgum.aegisub.domain.edit.ShiftTarget
+import io.github.samgum.aegisub.domain.format.AssFormat
+import io.github.samgum.aegisub.domain.format.SrtFormat
 import io.github.samgum.aegisub.domain.format.TimePrecision
+import io.github.samgum.aegisub.domain.format.VttFormat
 import io.github.samgum.aegisub.domain.time.SubTime
 import io.github.samgum.aegisub.feature.editor.components.LineAction
 import kotlinx.coroutines.Dispatchers
@@ -165,15 +168,30 @@ class EditorViewModelTest {
     @Test fun export_default_is_centisecond() = runTest(dispatcher) {
         val v = vm(ASS_SAMPLE, TimePrecision.AUTO)
         advanceUntilIdle()
-        val out = v.exportContent()
+        val out = v.exportAs(AssFormat)
         assertTrue("AUTO 应厘秒：$out", out.contains("0:00:01.00,"))
     }
 
     @Test fun export_three_ms_is_millisecond() = runTest(dispatcher) {
         val v = vm(ASS_SAMPLE, TimePrecision.THREE_MS)
         advanceUntilIdle()
-        val out = v.exportContent()
+        val out = v.exportAs(AssFormat)
         assertTrue("THREE_MS 应毫秒：$out", out.contains("0:00:01.000,"))
+    }
+
+    @Test fun export_as_srt_strips_tags_and_uses_comma() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE, TimePrecision.AUTO)
+        advanceUntilIdle()
+        val out = v.exportAs(SrtFormat)
+        assertTrue("SRT 应用逗号：$out", out.contains("00:00:01,000 --> 00:00:03,000"))
+    }
+
+    @Test fun export_as_vtt_uses_period_and_header() = runTest(dispatcher) {
+        val v = vm(ASS_SAMPLE, TimePrecision.AUTO)
+        advanceUntilIdle()
+        val out = v.exportAs(VttFormat)
+        assertTrue(out.startsWith("WEBVTT"))
+        assertTrue("VTT 应用句点：$out", out.contains("00:00:01.000 --> 00:00:03.000"))
     }
 
     @Test fun export_empty_when_load_failed() = runTest(dispatcher) {
@@ -181,7 +199,7 @@ class EditorViewModelTest {
         val v = EditorViewModel(ProjectSessionManager(ThrowingRepo()), FakeSettingsRepository(), FakeSnapshotRepository(), SavedStateHandle(mapOf("projectId" to "1")))
         advanceUntilIdle()
         assertTrue(v.state.value is EditorUiState.Error)
-        assertEquals("", v.exportContent())
+        assertEquals("", v.exportAs(AssFormat))
     }
 
     // ---------- 行级操作（LineOps 经 session.editEvents 单撤销点）----------
