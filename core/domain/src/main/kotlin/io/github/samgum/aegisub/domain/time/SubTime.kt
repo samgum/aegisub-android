@@ -16,6 +16,16 @@ value class SubTime private constructor(val micros: Long) : Comparable<SubTime> 
     override fun compareTo(other: SubTime): Int = micros.compareTo(other.micros)
     override fun toString(): String = "SubTime(${micros}µs)"
 
+    /** SRT 文本：HH:MM:SS,mmm（不取整，截断到毫秒）。 */
+    fun toSrtString(): String {
+        val total = millis
+        val h = total / 3_600_000
+        val m = (total % 3_600_000) / 60_000
+        val s = (total % 60_000) / 1_000
+        val mm = total % 1_000
+        return "%02d:%02d:%02d,%03d".format(h, m, s, mm)
+    }
+
     /** ASS 文本：H:MM:SS.cc（默认厘秒）或 H:MM:SS.mmm（msPrecision）。 */
     fun toAssString(msPrecision: Boolean): String {
         if (msPrecision) {
@@ -41,6 +51,8 @@ value class SubTime private constructor(val micros: Long) : Comparable<SubTime> 
         fun ofMicros(v: Long): SubTime = SubTime(v.coerceIn(0, MAX_MICROS))
         fun ofMillis(v: Long): SubTime = ofMicros(v * 1_000)
         fun ofCentiseconds(v: Long): SubTime = ofMicros(v * 10_000)
+
+        fun parseSrt(text: String): SubTime = ofMicros(parseFlexibleMs(text) * 1_000)
 
         /** Aegisub 风格容错解析：吃 H:MM:SS.cc / H:MM:SS.mmm / MM:SS.cc，`.`/`,` 皆可。 */
         fun parseAss(text: String): SubTime = ofMicros(parseFlexibleMs(text) * 1_000)
