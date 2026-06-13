@@ -3,11 +3,14 @@ package io.github.samgum.aegisub.feature.preview
 import androidx.lifecycle.SavedStateHandle
 import io.github.samgum.aegisub.data.repository.Project
 import io.github.samgum.aegisub.data.repository.ProjectRepository
+import io.github.samgum.aegisub.domain.preview.SubtitleRenderInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -139,6 +142,28 @@ class PreviewViewModelTest {
         advanceUntilIdle()
         v.releaseForTest()
         assertTrue(fake.released)
+    }
+
+    @Test fun active_subtitle_only_emits_on_event_change() = runTest(dispatcher) {
+        val fake = FakeVideoPlayer()
+        val v = vm(player = fake)
+        advanceUntilIdle()
+        val emissions = mutableListOf<SubtitleRenderInfo?>()
+        val job = launch { v.activeSubtitle.toList(emissions) }
+        advanceUntilIdle()
+        // position=0 < 1s：无活动事件
+        fake.emitPosition(2_000) // 落入第一句 [1s,3s)
+        advanceUntilIdle()
+        assertEquals("第一句", emissions.last()?.text)
+        val sizeAfterFirst = emissions.size
+        fake.emitPosition(2_500) // 仍在第一句区间
+        advanceUntilIdle()
+        assertEquals("同事件内位置变化不应触发新发射", sizeAfterFirst, emissions.size)
+        fake.emitPosition(5_000) // 进入第二句 [4s,6s)
+        advanceUntilIdle()
+        assertEquals("第二句", emissions.last()?.text)
+        assertTrue("跨事件应发新值", emissions.size > sizeAfterFirst)
+        job.cancel()
     }
 
     // ---------- fakes ----------

@@ -136,11 +136,7 @@ private fun VideoBlock(
             contentAlignment = Alignment.Center,
         ) {
             PlayerSurface(player = viewModel.videoPlayer, modifier = Modifier.fillMaxSize())
-            SubtitleOverlay(
-                script = state.script,
-                positionMs = state.playback.positionMs,
-                modifier = Modifier.fillMaxSize(),
-            )
+            ActiveSubtitleLayer(viewModel = viewModel)
             if (!state.hasMedia) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("未挂载视频", color = Color.White)
@@ -155,6 +151,16 @@ private fun VideoBlock(
             onSpeedChange = viewModel::setSpeed,
         )
     }
+}
+
+/**
+ * 活动字幕层：独立订阅 [PreviewViewModel.activeSubtitle]（仅事件切换时变化），
+ * 与 VideoBlock 的 50ms 位置 tick 重组解耦，降低低端机每帧开销。
+ */
+@Composable
+private fun ActiveSubtitleLayer(viewModel: PreviewViewModel) {
+    val info by viewModel.activeSubtitle.collectAsStateWithLifecycle()
+    SubtitleOverlay(renderInfo = info, modifier = Modifier.fillMaxSize())
 }
 
 @Composable

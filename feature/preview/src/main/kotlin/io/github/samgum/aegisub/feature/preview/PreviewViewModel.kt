@@ -8,11 +8,13 @@ import io.github.samgum.aegisub.data.repository.ProjectRepository
 import io.github.samgum.aegisub.domain.format.FormatRegistry
 import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.domain.preview.ActiveSubtitleResolver
+import io.github.samgum.aegisub.domain.preview.SubtitleRenderInfo
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -63,6 +65,17 @@ class PreviewViewModel @Inject constructor(
             )
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PreviewUiState.Loading)
+
+    /**
+     * 当前活动字幕渲染信息（distinctUntilChanged：仅活动事件切换时变化）。
+     * 叠加层订阅本流而非 50ms 位置 tick，降低低端机每帧重组开销。
+     */
+    val activeSubtitle: StateFlow<SubtitleRenderInfo?> = combine(base, player.state) { b, playback ->
+        when (b) {
+            is BaseState.Ready -> ActiveSubtitleResolver.renderInfo(b.script, playback.positionMs)
+            else -> null
+        }
+    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** 暴露播放器给 PlayerSurface 绑定（仅预览模块内做安全转型）。 */
     val videoPlayer: VideoPlayer get() = player

@@ -17,8 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.samgum.aegisub.domain.model.AssScript
-import io.github.samgum.aegisub.domain.preview.ActiveSubtitleResolver
+import io.github.samgum.aegisub.domain.preview.SubtitleRenderInfo
 
 /**
  * 视频画面字幕叠加（简化渲染）。
@@ -29,16 +28,15 @@ import io.github.samgum.aegisub.domain.preview.ActiveSubtitleResolver
  */
 @Composable
 fun SubtitleOverlay(
-    script: AssScript,
-    positionMs: Long,
+    renderInfo: SubtitleRenderInfo?,
     modifier: Modifier = Modifier,
 ) {
-    val info = ActiveSubtitleResolver.renderInfo(script, positionMs)
-    if (info == null || info.text.isBlank()) {
+    if (renderInfo == null || renderInfo.text.isBlank()) {
         // 无活动事件：透明占位（保留尺寸以覆盖视频区）
         Box(modifier.fillMaxSize())
         return
     }
+    val info = renderInfo
     val measurer = rememberTextMeasurer()
     val style = info.style
     val baseTextStyle = TextStyle(
