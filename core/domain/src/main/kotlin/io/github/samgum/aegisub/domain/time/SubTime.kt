@@ -26,6 +26,25 @@ value class SubTime private constructor(val micros: Long) : Comparable<SubTime> 
         return "%02d:%02d:%02d,%03d".format(h, m, s, mm)
     }
 
+    /** LRC 标签：[mm:ss.xx] / [mm:ss.xxx] / [mm:ss:xx] / [mm:ss:xxx]。 */
+    fun toLrcString(format: LrcTimeFormat): String {
+        val totalSec = micros / 1_000_000
+        val mm = totalSec / 60
+        val ss = totalSec % 60
+        val fracMicros = micros % 1_000_000
+        val sep = if (format.separator == LrcSeparator.DOT) '.' else ':'
+        return when (format.precision) {
+            LrcPrecision.CENTI -> {
+                val cc = fracMicros / 10_000 // 厘秒
+                "[%02d:%02d%s%02d]".format(mm, ss, sep, cc)
+            }
+            LrcPrecision.MILLI -> {
+                val mmm = fracMicros / 1_000 // 毫秒
+                "[%02d:%02d%s%03d]".format(mm, ss, sep, mmm)
+            }
+        }
+    }
+
     /** ASS 文本：H:MM:SS.cc（默认厘秒）或 H:MM:SS.mmm（msPrecision）。 */
     fun toAssString(msPrecision: Boolean): String {
         if (msPrecision) {
@@ -56,6 +75,26 @@ value class SubTime private constructor(val micros: Long) : Comparable<SubTime> 
 
         /** Aegisub 风格容错解析：吃 H:MM:SS.cc / H:MM:SS.mmm / MM:SS.cc，`.`/`,` 皆可。 */
         fun parseAss(text: String): SubTime = ofMicros(parseFlexibleMs(text) * 1_000)
+
+        /** 解析 LRC 标签 `[mm:ss.xx|xxx|:xx|:xxx]`，自动判定分隔符与精度。 */
+        fun parseLrc(tag: String): SubTime {
+            val inner = tag.trim().removeSurrounding("[", "]")
+            val firstColon = inner.indexOf(':')
+            require(firstColon > 0) { "Invalid LRC tag: $tag" }
+            val mm = inner.substring(0, firstColon).toLong()
+            val rest = inner.substring(firstColon + 1) // ss<sep>ff
+            val sep = if ('.' in rest) '.' else ':'
+            val (ssStr, fracStr) = rest.split(sep, limit = 2)
+                .let { it[0] to it.getOrElse(1) { "" } }
+            val ss = ssStr.toLong()
+            val frac = fracStr.ifEmpty { "0" }
+            val micros = (mm * 60 + ss) * 1_000_000 + when (frac.length) {
+                2 -> frac.toLong() * 10_000      // 厘秒
+                3 -> frac.toLong() * 1_000       // 毫秒
+                else -> (frac.toDouble() * 1_000_000).toLong()
+            }
+            return ofMicros(micros)
+        }
 
         /** 移植自 libaegisub Time::Time(string_view)：返回毫秒。 */
         private fun parseFlexibleMs(text: String): Long {
