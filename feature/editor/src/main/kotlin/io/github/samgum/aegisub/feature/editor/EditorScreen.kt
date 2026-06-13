@@ -5,6 +5,8 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,8 +20,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -56,7 +60,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.collections.immutable.toPersistentList
 import io.github.samgum.aegisub.data.settings.LayoutMode
+import io.github.samgum.aegisub.domain.edit.FramerateConverter
 import io.github.samgum.aegisub.domain.edit.ShiftTarget
+import io.github.samgum.aegisub.domain.edit.SortKey
+import io.github.samgum.aegisub.domain.edit.SortOrder
 import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.feature.editor.compact.EventEditSheet
@@ -101,6 +108,8 @@ fun EditorScreen(
     var showDeleteEmpty by remember { mutableStateOf(false) }
     var showStyleReplace by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
+    var showSort by remember { mutableStateOf(false) }
+    var showFramerate by remember { mutableStateOf(false) }
 
     when (val s = state) {
         EditorUiState.Loading ->
@@ -177,6 +186,8 @@ fun EditorScreen(
             onDismiss = { showToolbox = false },
             onFindReplace = { showToolbox = false; showFindReplace = true },
             onShiftTimes = { showToolbox = false; showShiftTimes = true },
+            onSort = { showToolbox = false; showSort = true },
+            onFramerate = { showToolbox = false; showFramerate = true },
             onDeleteEmpty = { showToolbox = false; showDeleteEmpty = true },
             onStyleReplace = { showToolbox = false; showStyleReplace = true },
             onOpenStyleManager = { showToolbox = false; onOpenStyles(viewModel.projectId) },
@@ -228,6 +239,26 @@ fun EditorScreen(
             onApply = { from, to ->
                 viewModel.replaceStyles(from, to)
                 showStyleReplace = false
+            },
+        )
+    }
+
+    if (showSort) {
+        SortDialog(
+            onDismiss = { showSort = false },
+            onApply = { key, order ->
+                viewModel.sortLines(key, order)
+                showSort = false
+            },
+        )
+    }
+
+    if (showFramerate) {
+        FramerateDialog(
+            onDismiss = { showFramerate = false },
+            onApply = { from, to ->
+                viewModel.convertFramerate(from, to)
+                showFramerate = false
             },
         )
     }
@@ -352,6 +383,8 @@ private fun ToolboxSheet(
     onDismiss: () -> Unit,
     onFindReplace: () -> Unit,
     onShiftTimes: () -> Unit,
+    onSort: () -> Unit,
+    onFramerate: () -> Unit,
     onDeleteEmpty: () -> Unit,
     onStyleReplace: () -> Unit,
     onOpenStyleManager: () -> Unit,
@@ -370,6 +403,12 @@ private fun ToolboxSheet(
             }
             item {
                 ToolEntry(Icons.AutoMirrored.Filled.ArrowForward, "时间偏移", "整体前移/后移，可仅作用于选中行之后") { onShiftTimes() }
+            }
+            item {
+                ToolEntry(Icons.Filled.Sort, "排序", "按起始/结束/样式/演员/效果/文本/层，升降序") { onSort() }
+            }
+            item {
+                ToolEntry(Icons.Filled.Movie, "帧率转换", "按 to/from 帧率等比缩放全部时间（24↔25↔30 等）") { onFramerate() }
             }
             item {
                 ToolEntry(Icons.Filled.Delete, "删除空行", "移除纯空 / 仅标签的行，保留绘图行") { onDeleteEmpty() }
@@ -507,6 +546,123 @@ private fun StyleDropdown(label: String, options: List<String>, selected: String
             }
         }
     }
+}
+
+/**
+ * 排序对话框：选择排序键与方向，应用到全部事件（一次撤销点）。
+ *
+ * @author 伤感咩吖
+ */
+@Composable
+private fun SortDialog(
+    onDismiss: () -> Unit,
+    onApply: (SortKey, SortOrder) -> Unit,
+) {
+    var key by remember { mutableStateOf(SortKey.START) }
+    var descending by remember { mutableStateOf(false) }
+    val keys = listOf(
+        SortKey.START to "起始时间",
+        SortKey.END to "结束时间",
+        SortKey.STYLE to "样式名",
+        SortKey.ACTOR to "演员名",
+        SortKey.EFFECT to "效果",
+        SortKey.TEXT to "文本",
+        SortKey.LAYER to "层",
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("排序") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("排序依据", style = MaterialTheme.typography.labelMedium)
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    keys.forEach { (k, label) ->
+                        FilterChip(selected = key == k, onClick = { key = k }, label = { Text(label) })
+                    }
+                }
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilterChip(
+                        selected = !descending,
+                        onClick = { descending = false },
+                        label = { Text("升序") },
+                    )
+                    FilterChip(
+                        selected = descending,
+                        onClick = { descending = true },
+                        label = { Text("降序") },
+                    )
+                }
+                Text(
+                    "相等项保持原序（稳定排序）。可撤销。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onApply(key, if (descending) SortOrder.DESCENDING else SortOrder.ASCENDING)
+            }) { Text("应用") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+/**
+ * 帧率转换对话框：选源/目标帧率，按比例等比缩放全部时间（一次撤销点）。
+ *
+ * @author 伤感咩吖
+ */
+@Composable
+private fun FramerateDialog(
+    onDismiss: () -> Unit,
+    onApply: (fromFps: Double, toFps: Double) -> Unit,
+) {
+    val presets = FramerateConverter.PRESETS
+    var from by remember { mutableStateOf(presets.first().second) } // 23.976
+    var to by remember { mutableStateOf(presets[2].second) }       // 25.0
+    val ratio = to / from
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("帧率转换") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("源帧率", style = MaterialTheme.typography.labelMedium)
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    presets.forEach { (label, value) ->
+                        FilterChip(selected = from == value, onClick = { from = value }, label = { Text(label) })
+                    }
+                }
+                Text("目标帧率", style = MaterialTheme.typography.labelMedium)
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    presets.forEach { (label, value) ->
+                        FilterChip(selected = to == value, onClick = { to = value }, label = { Text(label) })
+                    }
+                }
+                Text(
+                    if (ratio >= 1) "整体拉长 %.4f 倍（每 1s → %.3fs）".format(ratio, ratio)
+                    else "整体压缩 %.4f 倍（每 1s → %.3fs）".format(ratio, ratio),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onApply(from, to) }, enabled = from > 0 && to > 0) { Text("应用") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }
 
 /**
