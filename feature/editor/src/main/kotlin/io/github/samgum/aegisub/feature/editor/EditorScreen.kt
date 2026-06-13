@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -135,6 +136,7 @@ fun EditorScreen(
     var showStyling by remember { mutableStateOf(false) }
     var showTranslation by remember { mutableStateOf(false) }
     var showKaraoke by remember { mutableStateOf(false) }
+    var showTimingPP by remember { mutableStateOf(false) }
 
     when (val s = state) {
         EditorUiState.Loading ->
@@ -247,6 +249,7 @@ fun EditorScreen(
             onStyling = { showToolbox = false; showStyling = true },
             onTranslation = { showToolbox = false; showTranslation = true },
             onKaraoke = { showToolbox = false; showKaraoke = true },
+            onTimingPP = { showToolbox = false; showTimingPP = true },
             onDeleteEmpty = { showToolbox = false; showDeleteEmpty = true },
             onStyleReplace = { showToolbox = false; showStyleReplace = true },
             onOpenStyleManager = { showToolbox = false; onOpenStyles(viewModel.projectId) },
@@ -397,6 +400,16 @@ fun EditorScreen(
         }
     }
 
+    if (showTimingPP) {
+        TimingPostProcessDialog(
+            onDismiss = { showTimingPP = false },
+            onApply = { leadIn, leadOut, gap ->
+                viewModel.applyTimingPostProcess(leadIn, leadOut, gap)
+                showTimingPP = false
+            },
+        )
+    }
+
     if (showHistory) {
         HistorySheet(
             snapshots = snapshots,
@@ -531,6 +544,7 @@ private fun ToolboxSheet(
     onStyling: () -> Unit,
     onTranslation: () -> Unit,
     onKaraoke: () -> Unit,
+    onTimingPP: () -> Unit,
     onDeleteEmpty: () -> Unit,
     onStyleReplace: () -> Unit,
     onOpenStyleManager: () -> Unit,
@@ -576,6 +590,9 @@ private fun ToolboxSheet(
             }
             item {
                 ToolEntry(Icons.Filled.MusicNote, "卡拉OK生成", "把选中行切成音节并均匀分配时长，生成 {\\k}/{\\kf} 标签") { onKaraoke() }
+            }
+            item {
+                ToolEntry(Icons.Filled.Timer, "时间后处理", "lead-in/out 提前起始延后结束 + 去重叠强制最小间隙") { onTimingPP() }
             }
             item {
                 ToolEntry(Icons.Filled.PlayArrow, "历史版本", "保存当前为快照 / 恢复到过往版本（可撤销）") { onOpenHistory() }
@@ -931,6 +948,63 @@ private fun PropertiesSheet(
             }
         }
     }
+}
+
+/**
+ * 时间后处理对话框：lead-in/out 毫秒 + 最小间隙毫秒，应用到全部事件（单撤销点）。
+ *
+ * @author 伤感咩吖
+ */
+@Composable
+private fun TimingPostProcessDialog(
+    onDismiss: () -> Unit,
+    onApply: (leadInMs: Long, leadOutMs: Long, gapMs: Long) -> Unit,
+) {
+    var leadIn by remember { mutableStateOf("100") }
+    var leadOut by remember { mutableStateOf("100") }
+    var gap by remember { mutableStateOf("200") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("时间后处理") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = leadIn,
+                    onValueChange = { leadIn = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("Lead-in 起始提前（ms）") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = leadOut,
+                    onValueChange = { leadOut = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("Lead-out 结束延后（ms）") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = gap,
+                    onValueChange = { gap = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("最小间隙（ms，0=不去重叠）") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "按字幕顺序：先提前起始/延后结束，再强制相邻行最小间隙（去重叠）。可撤销。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onApply(leadIn.toLongOrNull() ?: 0L, leadOut.toLongOrNull() ?: 0L, gap.toLongOrNull() ?: 0L)
+            }) { Text("应用") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }
 
 /**

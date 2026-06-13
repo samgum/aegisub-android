@@ -23,6 +23,7 @@ import io.github.samgum.aegisub.domain.edit.SortOrder
 import io.github.samgum.aegisub.domain.edit.ScriptInfoOps
 import io.github.samgum.aegisub.domain.edit.SelectionOps
 import io.github.samgum.aegisub.domain.edit.StyleReplace
+import io.github.samgum.aegisub.domain.edit.TimePostProcess
 import io.github.samgum.aegisub.domain.edit.TimeShift
 import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.feature.editor.components.LineAction
@@ -233,6 +234,13 @@ class EditorViewModel @Inject constructor(
     /** 连续选中块整体下移一行。 */
     fun moveSelectedDown(ids: Set<Long>) {
         session.editEvents { SelectionOps.moveDownByIds(it, ids) }
+    }
+
+    /**
+     * 时间后处理（一次撤销点）：lead-in/out + 去重叠强制最小间隙，作用于全部事件（按网格顺序）。
+     */
+    fun applyTimingPostProcess(leadInMs: Long, leadOutMs: Long, gapMs: Long) {
+        session.editEvents { TimePostProcess.apply(it, leadInMs, leadOutMs, gapMs) }
     }
 
     // 注：时间偏移与样式批量替换已支持 selectedIds 参数（见上方 shiftTimes/replaceStyles）。
