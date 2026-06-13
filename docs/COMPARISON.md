@@ -76,12 +76,12 @@
 |---|---|---|
 | 翻译助手（原文→Name，译文→Text） | ✅ | `TranslationAssistantSheet`（Phase 8） |
 | Karaoke 生成 {\k}/{\kf} | ✅ | `KaraokeGenerator`（Phase 8，按词/按字，余数前置） |
-| Karaoke **交互式计时**（拖音节边界） | ❌ | **Phase 9 重点** |
+| Karaoke **交互式计时**（拖音节边界） | ✅ | KaraokeTimeline 拖拽音节分隔条挪动 {\k} 时长（P9-3） |
 | 可视化 {\pos} 拖拽 | ✅ | `VisualTypesettingOverlay`（Phase 8，脚本坐标系映射） |
 | 可视化 {\fr} 旋转 | ✅ | 滑块（Phase 8） |
 | 可视化 {\move} 两点动画 | ✅ | 双手柄（起点绿/终点橙），脚本坐标系（P9-2） |
 | 可视化 {\fad}/{\fade} 淡入淡出 | 🟡 | {\fad} ✅ 字段（P9-2）；{\fade} 7 参 ❌ |
-| 可视化 {\clip}/{\iclip} 裁剪 | ❌ | Phase 11 |
+| 可视化 {\clip}/{\iclip} 裁剪 | 🟡 | 矩形 ✅（打字面板 4 字段）；矢量 ❌ |
 | {\fscx}/{\fscy} 缩放手柄 | ❌ | Phase 9 |
 | {\org} 3D 旋转原点 | ❌ | 远期 |
 | 矢量裁剪工具（Vector Clip） | ❌ | 远期 |
@@ -106,7 +106,7 @@
 | 桌面功能 | Android | 说明 |
 |---|---|---|
 | 视频播放（倍速） | ✅ | Media3/ExoPlayer |
-| 字幕叠加预览 | 🟡 | Compose 简化渲染（去标签纯文本 + 真描边 + 对齐/边距/旋转）；非 libass 精确渲染 |
+| 字幕叠加预览 | ✅ | Compose 自绘：脚本分辨率→屏幕像素正确缩放 + {\pos} 锚点 + 换行 + 描边/阴影；非 libass 精确渲染 |
 | libass 精确渲染 | ❌ | 远期（JNI） |
 | 音频波形/频谱双视图 | ✅ | |
 
@@ -143,11 +143,13 @@
 - ✅ **关于页**：应用名/标语/作者（伤感咩吖）/许可证/版本/GitHub 链接。
 
 **仍待补（Phase 11+ 第四/五轮）：**
-1. Karaoke **交互式计时**（拖音节边界逐音节调整 {\k}）。
+1. ~~Karaoke **交互式计时**~~ ✅（P9-3，KaraokeTimeline 拖拽音节边界）。
 2. **粘贴覆盖**（Paste Over）—— 导出转换已完，行级粘贴覆盖待补。
-3. **{\clip}/{\iclip}** 矩形与矢量裁剪工具。
+3. ~~**{\clip}/{\iclip}** 矩形裁剪~~ ✅（打字面板 4 字段 + 反向 + 应用/清除）；矢量裁剪仍 ❌。
 4. **关键帧导入/检测 + 吸附** + 书签。
-5. **各类作者字段 / YCbCr Matrix** 编辑（批量写键值已就绪，差 UI）。
-6. feature 模块（editor/preview）字符串全面 i18n 化。
-7. libass JNI 精确渲染；MicroDVD / Matroska 格式；Lua Automation / 插件 / AI 辅助（远期）。
+5. ~~**各类作者字段 / YCbCr Matrix** 编辑~~ ✅（Properties 面板补齐 Script/Translation/Editing/Timing/Synch Point/Updated By/YCbCr Matrix）。
+6. ~~feature 模块（editor/preview）字符串全面 i18n 化~~ ✅（工具箱/行操作/字段/对话框标题/分段标签已完成；个别字段标签续）。
+7. **字幕叠加渲染修复** ✅（脚本分辨率→屏幕像素正确缩放 + {\pos} + 换行 + 阴影；此前字号单位错误致实际不可用）。
+8. **预览布局重构** ✅（竖屏分段切换让字幕列表拿回完整剩余空间；横屏列表可达）。
+9. libass JNI 精确渲染；MicroDVD / Matroska 格式；Lua Automation / 插件 / AI 辅助（远期）。
 
