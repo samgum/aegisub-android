@@ -28,7 +28,7 @@
 | 撤销 / 重做 | ✅ | CoW 快照，有界环形缓冲 |
 | 查找 / 替换（正则、忽略大小写） | ✅ | 一次撤销点 |
 | 复制 / 粘贴行 | 🟡 | 有复制行（LineOps.duplicate）；无系统剪贴板行级复制 |
-| 粘贴覆盖（Paste Over） | ❌ | Phase 9 |
+| 粘贴覆盖（Paste Over） | ✅ | 多行文本按序覆盖选中/全部行（Phase 11） |
 | 行级操作：插入/删除/复制/分割/合并/上下移 | ✅ | `LineOps`（Phase 8） |
 | 合并（拼接 / 留首 / Karaoke） | 🟡 | 拼接 + 留首 ✅；Karaoke 合并 ❌ |
 | 排序（起止/样式/演员/效果/文本/层） | ✅ | `SortLines`（Phase 8） |
@@ -99,7 +99,7 @@
 | **场景吸附**（Snap to Scenes） | ❌ | Phase 9 |
 | 时间后处理（去重叠 / lead-in/out） | ✅ | lead-in/out + 去重叠强制最小间隙（P9-4） |
 | Kanji Timer（汉字计时） | ❌ | 远期 |
-| 书签（Bookmarks） | ❌ | Phase 9 候选 |
+| 书签（Bookmarks） | ✅ | Room bookmarks 表 + 时间面板加/跳转/删除（Phase 11） |
 
 ## 8. 视频 / 音频引擎
 
@@ -144,12 +144,12 @@
 
 **仍待补（Phase 11+ 第四/五轮）：**
 1. ~~Karaoke **交互式计时**~~ ✅（P9-3，KaraokeTimeline 拖拽音节边界）。
-2. **粘贴覆盖**（Paste Over）—— 导出转换已完，行级粘贴覆盖待补。
+2. ~~**粘贴覆盖**（Paste Over）~~ ✅（多行文本按序覆盖选中行/全部行）。
 3. ~~**{\clip}/{\iclip}** 矩形裁剪~~ ✅（打字面板 4 字段 + 反向 + 应用/清除）；矢量裁剪仍 ❌。
-4. **关键帧导入/检测 + 吸附** + 书签。
-5. ~~**各类作者字段 / YCbCr Matrix** 编辑~~ ✅（Properties 面板补齐 Script/Translation/Editing/Timing/Synch Point/Updated By/YCbCr Matrix）。
-6. ~~feature 模块（editor/preview）字符串全面 i18n 化~~ ✅（工具箱/行操作/字段/对话框标题/分段标签已完成；个别字段标签续）。
-7. **字幕叠加渲染修复** ✅（脚本分辨率→屏幕像素正确缩放 + {\pos} + 换行 + 阴影；此前字号单位错误致实际不可用）。
+4. **关键帧导入/检测 + 吸附**；~~书签~~ ✅（Room bookmarks 表 + 时间面板加/跳转/删除）。
+5. ~~**各类作者字段 / YCbCr Matrix** 编辑~~ ✅（Properties 面板补齐）。
+6. ~~feature 模块（editor/preview）字符串全面 i18n 化~~ ✅（工具箱/行操作/字段/对话框标题/分段标签/打字控件已完成）。
+7. **字幕叠加渲染修复** ✅（脚本分辨率→屏幕像素正确缩放 + {\pos} + 换行 + 阴影 + **多行按层堆叠**）。
 8. **预览布局重构** ✅（竖屏分段切换让字幕列表拿回完整剩余空间；横屏列表可达）。
 9. libass JNI 精确渲染；MicroDVD / Matroska 格式；Lua Automation / 插件 / AI 辅助（远期）。
 

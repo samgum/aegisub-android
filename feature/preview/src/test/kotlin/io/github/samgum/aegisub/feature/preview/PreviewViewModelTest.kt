@@ -1,6 +1,8 @@
 package io.github.samgum.aegisub.feature.preview
 
 import androidx.lifecycle.SavedStateHandle
+import io.github.samgum.aegisub.data.repository.Bookmark
+import io.github.samgum.aegisub.data.repository.BookmarkRepository
 import io.github.samgum.aegisub.data.repository.Project
 import io.github.samgum.aegisub.data.repository.ProjectRepository
 import io.github.samgum.aegisub.data.session.ProjectSessionManager
@@ -61,7 +63,10 @@ class PreviewViewModelTest {
         player: VideoPlayer = FakeVideoPlayer(),
     ): PreviewViewModel {
         val repo = FakeProjectRepository(content, mediaUri)
-        return PreviewViewModel(ProjectSessionManager(repo), repo, player, NoopWaveformExtractor, SavedStateHandle(mapOf("projectId" to "42")))
+        return PreviewViewModel(
+            ProjectSessionManager(repo), repo, FakeBookmarkRepository(),
+            player, NoopWaveformExtractor, SavedStateHandle(mapOf("projectId" to "42")),
+        )
     }
 
     @Test fun loads_script_into_loaded_state() = runTest(dispatcher) {
@@ -120,7 +125,7 @@ class PreviewViewModelTest {
     @Test fun attach_media_persists_and_sets_player() = runTest(dispatcher) {
         val fake = FakeVideoPlayer()
         val repo = FakeProjectRepository(sampleAss, mediaUri = null)
-        val v = PreviewViewModel(ProjectSessionManager(repo), repo, fake, NoopWaveformExtractor, SavedStateHandle(mapOf("projectId" to "42")))
+        val v = PreviewViewModel(ProjectSessionManager(repo), repo, FakeBookmarkRepository(), fake, NoopWaveformExtractor, SavedStateHandle(mapOf("projectId" to "42")))
         advanceUntilIdle()
         v.attachMedia("content://video/9")
         advanceUntilIdle()
@@ -131,7 +136,7 @@ class PreviewViewModelTest {
 
     @Test fun error_state_when_repo_throws() = runTest(dispatcher) {
         val repo = FakeProjectRepository(throwOnGetContent = true)
-        val v = PreviewViewModel(ProjectSessionManager(repo), repo, FakeVideoPlayer(), NoopWaveformExtractor, SavedStateHandle(mapOf("projectId" to "1")))
+        val v = PreviewViewModel(ProjectSessionManager(repo), repo, FakeBookmarkRepository(), FakeVideoPlayer(), NoopWaveformExtractor, SavedStateHandle(mapOf("projectId" to "1")))
         advanceUntilIdle()
         assertTrue(v.state.value is PreviewUiState.Error)
     }
@@ -148,20 +153,20 @@ class PreviewViewModelTest {
         val fake = FakeVideoPlayer()
         val v = vm(player = fake)
         advanceUntilIdle()
-        val emissions = mutableListOf<SubtitleRenderInfo?>()
-        val job = launch { v.activeSubtitle.toList(emissions) }
+        val emissions = mutableListOf<List<SubtitleRenderInfo>>()
+        val job = launch { v.activeSubtitles.toList(emissions) }
         advanceUntilIdle()
         // position=0 < 1s：无活动事件
         fake.emitPosition(2_000) // 落入第一句 [1s,3s)
         advanceUntilIdle()
-        assertEquals("第一句", emissions.last()?.text)
+        assertEquals("第一句", emissions.last().firstOrNull()?.text)
         val sizeAfterFirst = emissions.size
         fake.emitPosition(2_500) // 仍在第一句区间
         advanceUntilIdle()
         assertEquals("同事件内位置变化不应触发新发射", sizeAfterFirst, emissions.size)
         fake.emitPosition(5_000) // 进入第二句 [4s,6s)
         advanceUntilIdle()
-        assertEquals("第二句", emissions.last()?.text)
+        assertEquals("第二句", emissions.last().firstOrNull()?.text)
         assertTrue("跨事件应发新值", emissions.size > sizeAfterFirst)
         job.cancel()
     }
@@ -266,6 +271,12 @@ class PreviewViewModelTest {
     }
 
     // ---------- fakes ----------
+
+    private class FakeBookmarkRepository : BookmarkRepository {
+        override fun observeBookmarks(projectId: Long): Flow<List<Bookmark>> = flowOf(emptyList())
+        override suspend fun addBookmark(projectId: Long, timeMs: Long, label: String, now: Long): Long = 0L
+        override suspend fun deleteBookmark(id: Long) {}
+    }
 
     private object NoopWaveformExtractor : WaveformExtractor {
         override suspend fun extract(uri: String, bucketCount: Int) = null
