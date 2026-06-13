@@ -6,6 +6,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import io.github.samgum.aegisub.feature.preview.Media3VideoPlayer
 import io.github.samgum.aegisub.feature.preview.VideoPlayer
+import io.github.samgum.aegisub.feature.preview.audio.MediaCodecWaveformExtractor
+import io.github.samgum.aegisub.feature.preview.audio.WaveformExtractor
 
 /**
  * 预览模块 DI 绑定。VideoPlayer 不加 @Singleton：每个 PreviewViewModel 注入新实例，
@@ -18,4 +20,7 @@ import io.github.samgum.aegisub.feature.preview.VideoPlayer
 abstract class PreviewModule {
     @Binds
     abstract fun bindVideoPlayer(impl: Media3VideoPlayer): VideoPlayer
+
+    @Binds
+    abstract fun bindWaveformExtractor(impl: MediaCodecWaveformExtractor): WaveformExtractor
 }

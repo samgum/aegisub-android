@@ -5,6 +5,7 @@ import io.github.samgum.aegisub.data.repository.Project
 import io.github.samgum.aegisub.data.repository.ProjectRepository
 import io.github.samgum.aegisub.data.session.ProjectSessionManager
 import io.github.samgum.aegisub.domain.preview.SubtitleRenderInfo
+import io.github.samgum.aegisub.feature.preview.audio.WaveformExtractor
 import io.github.samgum.aegisub.domain.time.SubTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -60,7 +61,7 @@ class PreviewViewModelTest {
         player: VideoPlayer = FakeVideoPlayer(),
     ): PreviewViewModel {
         val repo = FakeProjectRepository(content, mediaUri)
-        return PreviewViewModel(ProjectSessionManager(repo), repo, player, SavedStateHandle(mapOf("projectId" to "42")))
+        return PreviewViewModel(ProjectSessionManager(repo), repo, player, NoopWaveformExtractor, SavedStateHandle(mapOf("projectId" to "42")))
     }
 
     @Test fun loads_script_into_loaded_state() = runTest(dispatcher) {
@@ -119,7 +120,7 @@ class PreviewViewModelTest {
     @Test fun attach_media_persists_and_sets_player() = runTest(dispatcher) {
         val fake = FakeVideoPlayer()
         val repo = FakeProjectRepository(sampleAss, mediaUri = null)
-        val v = PreviewViewModel(ProjectSessionManager(repo), repo, fake, SavedStateHandle(mapOf("projectId" to "42")))
+        val v = PreviewViewModel(ProjectSessionManager(repo), repo, fake, NoopWaveformExtractor, SavedStateHandle(mapOf("projectId" to "42")))
         advanceUntilIdle()
         v.attachMedia("content://video/9")
         advanceUntilIdle()
@@ -130,7 +131,7 @@ class PreviewViewModelTest {
 
     @Test fun error_state_when_repo_throws() = runTest(dispatcher) {
         val repo = FakeProjectRepository(throwOnGetContent = true)
-        val v = PreviewViewModel(ProjectSessionManager(repo), repo, FakeVideoPlayer(), SavedStateHandle(mapOf("projectId" to "1")))
+        val v = PreviewViewModel(ProjectSessionManager(repo), repo, FakeVideoPlayer(), NoopWaveformExtractor, SavedStateHandle(mapOf("projectId" to "1")))
         advanceUntilIdle()
         assertTrue(v.state.value is PreviewUiState.Error)
     }
@@ -216,6 +217,10 @@ class PreviewViewModelTest {
     }
 
     // ---------- fakes ----------
+
+    private object NoopWaveformExtractor : WaveformExtractor {
+        override suspend fun extract(uri: String, bucketCount: Int) = null
+    }
 
     private class FakeVideoPlayer(private val durationMs: Long = 0L) : VideoPlayer {
         override val state = MutableStateFlow(PlaybackState(durationMs = durationMs))

@@ -6,15 +6,18 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.samgum.aegisub.data.repository.ProjectRepository
 import io.github.samgum.aegisub.data.session.ProjectSessionManager
+import io.github.samgum.aegisub.domain.audio.Waveform
 import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.domain.preview.ActiveSubtitleResolver
 import io.github.samgum.aegisub.domain.preview.SubtitleRenderInfo
 import io.github.samgum.aegisub.domain.preview.TimingConstraints
 import io.github.samgum.aegisub.domain.time.SubTime
+import io.github.samgum.aegisub.feature.preview.audio.WaveformExtractor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
@@ -40,8 +43,7 @@ sealed interface PreviewUiState {
 
 /**
  * 预览 ViewModel：与编辑器共享 [io.github.samgum.aegisub.data.session.ProjectSession]，
- * 因此可在预览屏直接编辑选中行的起止时间（editEventTimes/nudge），改动同步回编辑器并防抖落盘。
- * 媒体挂载仍由本类直管（不进 session）。
+ * 可在预览屏直接编辑选中行的起止时间。媒体挂载与音频波形提取由本类直管。
  *
  * @author 伤感咩吖
  */
@@ -51,6 +53,7 @@ class PreviewViewModel @Inject constructor(
     manager: ProjectSessionManager,
     private val repo: ProjectRepository,
     private val player: VideoPlayer,
+    private val extractor: WaveformExtractor,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -60,6 +63,9 @@ class PreviewViewModel @Inject constructor(
 
     private val _hasMedia = MutableStateFlow(false)
     private val _selectedEventId = MutableStateFlow<Long?>(null)
+
+    private val _waveform = MutableStateFlow<Waveform?>(null)
+    val waveform: StateFlow<Waveform?> = _waveform.asStateFlow()
 
     private val base = combine(session.script, session.errorMessage, _hasMedia) { script, error, hasMedia ->
         when {
@@ -106,6 +112,7 @@ class PreviewViewModel @Inject constructor(
             if (uri != null) {
                 player.setMedia(uri)
                 _hasMedia.value = true
+                loadWaveform(uri)
             }
         }
     }
@@ -170,6 +177,7 @@ class PreviewViewModel @Inject constructor(
             repo.setMediaUri(projectId, uri)
             player.setMedia(uri)
             _hasMedia.value = true
+            loadWaveform(uri)
         }
     }
 
@@ -183,6 +191,17 @@ class PreviewViewModel @Inject constructor(
     /** 测试专用：触发 onCleared 等价的播放器释放。 */
     internal fun releaseForTest() {
         player.release()
+    }
+
+    /** 异步提取音频波形（挂载/更换视频时触发）。 */
+    private fun loadWaveform(uri: String) {
+        viewModelScope.launch {
+            _waveform.value = extractor.extract(uri, WAVEFORM_BUCKETS)
+        }
+    }
+
+    private companion object {
+        const val WAVEFORM_BUCKETS = 300
     }
 
     private sealed interface BaseState {
