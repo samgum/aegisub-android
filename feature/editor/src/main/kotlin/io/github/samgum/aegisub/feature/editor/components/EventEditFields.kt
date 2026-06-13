@@ -18,11 +18,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.collections.immutable.ImmutableList
 import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.time.SubTime
+import io.github.samgum.aegisub.feature.editor.R
 
 /**
  * 事件编辑字段集：文本/起止时间/样式/层。容器无关——
@@ -47,7 +49,7 @@ fun EventEditFields(
         OutlinedTextField(
             value = event.text,
             onValueChange = onTextChanged,
-            label = { Text("文本") },
+            label = { Text(stringResource(R.string.edit_text)) },
             modifier = Modifier.fillMaxWidth(),
         )
 
@@ -62,7 +64,7 @@ fun EventEditFields(
                     runCatching { SubTime.parseAss(it) }
                         .onSuccess { s -> onTimesChanged(s, event.end) }
                 },
-                label = { Text("开始") },
+                label = { Text(stringResource(R.string.edit_start)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(0.5f),
             )
@@ -73,7 +75,7 @@ fun EventEditFields(
                     runCatching { SubTime.parseAss(it) }
                         .onSuccess { e -> onTimesChanged(event.start, e) }
                 },
-                label = { Text("结束") },
+                label = { Text(stringResource(R.string.edit_end)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -88,7 +90,7 @@ fun EventEditFields(
             OutlinedTextField(
                 value = event.style,
                 onValueChange = onStyleChanged,
-                label = { Text("样式") },
+                label = { Text(stringResource(R.string.edit_style)) },
                 singleLine = true,
                 trailingIcon = {
                     ExposedDropdownMenuDefaults.TrailingIcon(expanded = styleExpanded)
@@ -117,7 +119,7 @@ fun EventEditFields(
         OutlinedTextField(
             value = event.layer.toString(),
             onValueChange = { raw -> raw.toIntOrNull()?.let(onLayerChanged) },
-            label = { Text("层") },
+            label = { Text(stringResource(R.string.edit_layer)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(),

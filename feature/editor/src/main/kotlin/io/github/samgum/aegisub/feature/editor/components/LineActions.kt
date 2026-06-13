@@ -21,7 +21,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import io.github.samgum.aegisub.feature.editor.R
 
 /**
  * 行级操作种类（对齐桌面 Aegisub Edit 菜单与字幕网格右键）。
@@ -58,14 +60,14 @@ fun LineActions(
         horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Entry(Icons.Filled.KeyboardArrowUp, "上移") { onAction(LineAction.MOVE_UP) }
-        Entry(Icons.Filled.KeyboardArrowDown, "下移") { onAction(LineAction.MOVE_DOWN) }
-        Entry(null, "复制") { onAction(LineAction.DUPLICATE) }
-        Entry(Icons.Filled.Add, "前插") { onAction(LineAction.INSERT_BEFORE) }
-        Entry(null, "后插") { onAction(LineAction.INSERT_AFTER) }
-        Entry(null, "分割") { onAction(LineAction.SPLIT) }
-        Entry(null, "合并") { onAction(LineAction.JOIN_NEXT) }
-        Entry(Icons.Filled.Delete, "删除") { onAction(LineAction.DELETE) }
+        Entry(Icons.Filled.KeyboardArrowUp, stringResource(R.string.action_move_up)) { onAction(LineAction.MOVE_UP) }
+        Entry(Icons.Filled.KeyboardArrowDown, stringResource(R.string.action_move_down)) { onAction(LineAction.MOVE_DOWN) }
+        Entry(null, stringResource(R.string.action_duplicate)) { onAction(LineAction.DUPLICATE) }
+        Entry(Icons.Filled.Add, stringResource(R.string.action_insert_before)) { onAction(LineAction.INSERT_BEFORE) }
+        Entry(null, stringResource(R.string.action_insert_after)) { onAction(LineAction.INSERT_AFTER) }
+        Entry(null, stringResource(R.string.action_split)) { onAction(LineAction.SPLIT) }
+        Entry(null, stringResource(R.string.action_join)) { onAction(LineAction.JOIN_NEXT) }
+        Entry(Icons.Filled.Delete, stringResource(R.string.action_delete)) { onAction(LineAction.DELETE) }
     }
 }
 
