@@ -909,6 +909,19 @@ private fun PropertiesSheet(
         "2" to "不换行",
         "3" to "智能换行（底宽）",
     )
+    // 作者与元信息字段（key → 标签），桌面 Aegisub Properties 同名键
+    val authorFields = listOf(
+        "Script" to "原始脚本（Script）",
+        "Translation" to "翻译（Translation）",
+        "Editing" to "编辑（Editing）",
+        "Timing" to "打轴（Timing）",
+        "Synch Point" to "同步点（Synch Point）",
+        "Updated By" to "更新者（Updated By）",
+        "YCbCr Matrix" to "YCbCr Matrix",
+    )
+    val authorValues = remember(info) {
+        authorFields.map { (k, _) -> mutableStateOf(ScriptInfoOps.get(info, k) ?: "") }
+    }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
             modifier = Modifier
@@ -969,6 +982,17 @@ private fun PropertiesSheet(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth(),
             )
+            HorizontalDivider()
+            Text("作者与元信息", style = MaterialTheme.typography.labelLarge)
+            authorFields.forEachIndexed { i, (_, label) ->
+                OutlinedTextField(
+                    value = authorValues[i].value,
+                    onValueChange = { authorValues[i].value = it },
+                    label = { Text(label) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -983,6 +1007,10 @@ private fun PropertiesSheet(
                         put("ScaledBorderAndShadow", sbs)
                         put("Collisions", collisions)
                         if (timer.isNotBlank()) put("Timer", timer)
+                        authorFields.forEachIndexed { i, (key, _) ->
+                            val v = authorValues[i].value
+                            if (v.isNotBlank()) put(key, v)
+                        }
                     }
                     onApply(changes)
                 }) { Text("应用") }
