@@ -167,6 +167,8 @@ git -C "d:/VS Code Project/aegisub-android" commit -m "feat(domain): TimingConst
 - Create: `core/data/src/main/kotlin/io/github/samgum/aegisub/data/session/ProjectSessionImpl.kt`
 - Test: `core/data/src/test/kotlin/io/github/samgum/aegisub/data/session/ProjectSessionImplTest.kt`
 
+> **执行调整（已验证）**：`ProjectSessionImpl` 改用**内部自建 scope（`Main.immediate`）**，不再接收 `scope` 构造参数。原计划把防抖 collect 跑在传入的 runTest scope 上，实测触发 `UncompletedCoroutinesError`（collect 无限挂起，runTest 判定未完成）；与原 `EditorViewModel.wireAutoSave` 跑在独立 `viewModelScope` 同理改用独立 scope。测试需 `Dispatchers.setMain(dispatcher)` + `runTest(dispatcher)`，`session(repo)` 不再传 scope——以下 ProjectSessionImplTest 代码块以**实际文件**为准（含 setMain/runTest(dispatcher)），文字描述的 Step 1-6 逻辑不变。
+
 - [ ] **Step 1: 写接口**
 
 `core/data/src/main/kotlin/io/github/samgum/aegisub/data/session/ProjectSession.kt`:
@@ -367,8 +369,10 @@ import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.domain.undo.SnapshotUndoStack
 import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -377,7 +381,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
-import kotlin.coroutines.EmptyCoroutineContext
 
 /**
  * [ProjectSession] 默认实现：复刻自原 EditorViewModel 的编辑/撤销/防抖回写语义。
@@ -392,8 +395,14 @@ import kotlin.coroutines.EmptyCoroutineContext
 internal class ProjectSessionImpl(
     override val projectId: Long,
     private val repo: ProjectRepository,
-    private val scope: CoroutineScope,
 ) : ProjectSession {
+
+    /**
+     * 独立 scope（Main.immediate）：防抖收集长期运行，不挂调用方的 runTest scope，
+     * 避免测试结束时「collect 永久挂起」被判为未完成协程（原 EditorViewModel 的 wireAutoSave
+     * 跑在独立 viewModelScope 上同理）。测试通过 Dispatchers.setMain 注入 TestDispatcher 推进虚拟时间。
+     */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private var stack: SnapshotUndoStack<AssScript>? = null
 
@@ -410,7 +419,7 @@ internal class ProjectSessionImpl(
 
     init {
         // 防抖回写：script 变化后（跳过加载首版本）回写 Room
-        scope.launch(EmptyCoroutineContext) {
+        scope.launch {
             _script
                 .filterNotNull()
                 .distinctUntilChanged()
@@ -425,7 +434,7 @@ internal class ProjectSessionImpl(
     /** 触发异步加载。由 [ProjectSessionManager.open] 调用；幂等（重复调用仅加载一次）。 */
     fun start() {
         if (stack != null || _errorMessage.value != null) return
-        scope.launch(EmptyCoroutineContext) {
+        scope.launch {
             try {
                 val content = repo.getContent(projectId)
                 val parsed = FormatRegistry.detect(content)?.read(content) ?: AssScript.default()
