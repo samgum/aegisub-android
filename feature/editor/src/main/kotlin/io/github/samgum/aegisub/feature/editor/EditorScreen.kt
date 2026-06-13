@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -68,6 +69,7 @@ import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toPersistentList
 import io.github.samgum.aegisub.data.settings.LayoutMode
 import io.github.samgum.aegisub.domain.edit.FramerateConverter
+import io.github.samgum.aegisub.domain.edit.KaraokeMode
 import io.github.samgum.aegisub.domain.edit.ScriptInfoOps
 import io.github.samgum.aegisub.domain.edit.ShiftTarget
 import io.github.samgum.aegisub.domain.edit.SortKey
@@ -124,6 +126,7 @@ fun EditorScreen(
     var showProperties by remember { mutableStateOf(false) }
     var showStyling by remember { mutableStateOf(false) }
     var showTranslation by remember { mutableStateOf(false) }
+    var showKaraoke by remember { mutableStateOf(false) }
 
     when (val s = state) {
         EditorUiState.Loading ->
@@ -205,6 +208,7 @@ fun EditorScreen(
             onProperties = { showToolbox = false; showProperties = true },
             onStyling = { showToolbox = false; showStyling = true },
             onTranslation = { showToolbox = false; showTranslation = true },
+            onKaraoke = { showToolbox = false; showKaraoke = true },
             onDeleteEmpty = { showToolbox = false; showDeleteEmpty = true },
             onStyleReplace = { showToolbox = false; showStyleReplace = true },
             onOpenStyleManager = { showToolbox = false; onOpenStyles(viewModel.projectId) },
@@ -340,6 +344,21 @@ fun EditorScreen(
         }
     }
 
+    if (showKaraoke) {
+        val loaded = state as? EditorUiState.Loaded
+        val events = loaded?.script?.events
+        val hasSelection = events != null && events.any { it.id == editingId }
+        if (loaded != null && hasSelection && editingId != null) {
+            KaraokeDialog(
+                onDismiss = { showKaraoke = false },
+                onApply = { mode, useKf ->
+                    viewModel.makeKaraoke(editingId!!, mode, useKf)
+                    showKaraoke = false
+                },
+            )
+        }
+    }
+
     if (showHistory) {
         HistorySheet(
             snapshots = snapshots,
@@ -465,6 +484,7 @@ private fun ToolboxSheet(
     onProperties: () -> Unit,
     onStyling: () -> Unit,
     onTranslation: () -> Unit,
+    onKaraoke: () -> Unit,
     onDeleteEmpty: () -> Unit,
     onStyleReplace: () -> Unit,
     onOpenStyleManager: () -> Unit,
@@ -507,6 +527,9 @@ private fun ToolboxSheet(
             }
             item {
                 ToolEntry(Icons.Filled.Translate, "翻译助手", "逐行原文→译文：原文存 Name，译文存 Text，自动前进") { onTranslation() }
+            }
+            item {
+                ToolEntry(Icons.Filled.MusicNote, "卡拉OK生成", "把选中行切成音节并均匀分配时长，生成 {\\k}/{\\kf} 标签") { onKaraoke() }
             }
             item {
                 ToolEntry(Icons.Filled.PlayArrow, "历史版本", "保存当前为快照 / 恢复到过往版本（可撤销）") { onOpenHistory() }
@@ -862,6 +885,55 @@ private fun PropertiesSheet(
             }
         }
     }
+}
+
+/**
+ * 卡拉OK生成对话框：选切分模式（按词/按字）+ 填充类型（{\k}/{\kf}），
+ * 应用到当前选中行（单撤销点）。
+ *
+ * @author 伤感咩吖
+ */
+@Composable
+private fun KaraokeDialog(
+    onDismiss: () -> Unit,
+    onApply: (KaraokeMode, useKf: Boolean) -> Unit,
+) {
+    var mode by remember { mutableStateOf(KaraokeMode.BY_WORD) }
+    var useKf by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("卡拉OK生成") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("切分模式", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(
+                        selected = mode == KaraokeMode.BY_WORD,
+                        onClick = { mode = KaraokeMode.BY_WORD },
+                        label = { Text("按词（空格）") },
+                    )
+                    FilterChip(
+                        selected = mode == KaraokeMode.BY_CHAR,
+                        onClick = { mode = KaraokeMode.BY_CHAR },
+                        label = { Text("按字（每字符）") },
+                    )
+                }
+                Text("填充类型", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(selected = !useKf, onClick = { useKf = false }, label = { Text("{\\k} 逐字填充") })
+                    FilterChip(selected = useKf, onClick = { useKf = true }, label = { Text("{\\kf} 平滑填充") })
+                }
+                Text(
+                    "把选中行文本切成音节，时长均匀分配（余数前置），生成 karaoke 标签。可撤销。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onApply(mode, useKf) }) { Text("应用到选中行") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }
 
 /**

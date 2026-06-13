@@ -13,6 +13,8 @@ import io.github.samgum.aegisub.domain.format.AssFormat
 import io.github.samgum.aegisub.domain.format.WriteOptions
 import io.github.samgum.aegisub.domain.edit.DeleteEmpty
 import io.github.samgum.aegisub.domain.edit.FramerateConverter
+import io.github.samgum.aegisub.domain.edit.KaraokeGenerator
+import io.github.samgum.aegisub.domain.edit.KaraokeMode
 import io.github.samgum.aegisub.domain.edit.LineOps
 import io.github.samgum.aegisub.domain.edit.ShiftTarget
 import io.github.samgum.aegisub.domain.edit.SortKey
@@ -95,6 +97,14 @@ class EditorViewModel @Inject constructor(
      */
     fun setTranslation(eventId: Long, original: String, translation: String) =
         session.editEvent(eventId) { it.copy(actor = original, text = translation) }
+
+    /**
+     * Karaoke 生成：把指定行文本切成音节并均匀分配时长，生成 {\k}/{\kf} 标签（单撤销点）。
+     */
+    fun makeKaraoke(eventId: Long, mode: KaraokeMode, useKf: Boolean) =
+        session.editEvent(eventId) { e ->
+            e.copy(text = KaraokeGenerator.generateFromEvent(e, mode, useKf))
+        }
 
     /** 全局查找替换所有事件的文本（一次撤销点）。 */
     fun replaceAll(query: String, replacement: String, useRegex: Boolean, ignoreCase: Boolean) {
