@@ -2,7 +2,7 @@
 
 > 滚动更新。每完成一个 Phase 提交 Commit 并更新本文件与 README。
 
-## 当前状态：✅ Phase 0 / 1 / 2 / 3 完成。字幕编辑闭环 + 视频预览可用（挂载视频 SAF 持久化 → Media3 播放/seek/倍速 → 画面叠加简化字幕 → 点行跳转/当前行高亮）。剩余 Phase 1：DataStore 设置；下一步 Phase 4（音频工程/打轴辅助）。
+## 当前状态：✅ Phase 0 / 1 / 2 / 3 完成 + 文件 I/O + Aegisub 图标。字幕编辑闭环 + 视频预览 + 真实文件读写可用（导入 ASS/SSA/SRT/LRC/TXT → 编辑 → 导出；预览挂载视频 SAF 持久化 → Media3 播放/seek/倍速 → 叠加字幕 → 点行跳转/当前行高亮；叠加按活动事件切换重组）。剩余 Phase 1：DataStore 设置；下一步 Phase 4（音频工程/打轴辅助）。
 
 ---
 
@@ -41,6 +41,11 @@
 - [x] 视频画面与字幕叠加预览（简化渲染：去标签纯文本 + 样式，Compose 自绘真描边 + 对齐/边距）
 - [x] 基础时间轴：播放/暂停/seek/倍速 + 点行跳转 + 当前行高亮（拖拽改时间留 Phase 4）
 - [ ] 拖拽起止手柄改时间 — 待办（Phase 4）
+
+### 增量交付（Phase 3 之后）
+- [x] 应用图标复用 Aegisub 原版（icon-mk2）
+- [x] 文件导入/导出（SAF OpenDocument / CreateDocument；复用域编解码；SubtitleImport 解析）
+- [x] 叠加层性能优化（按活动事件切换重组，缓解低端机卡顿）
 
 ## Phase 4 · 音频工程
 - [ ] 音频波形提取与渲染
