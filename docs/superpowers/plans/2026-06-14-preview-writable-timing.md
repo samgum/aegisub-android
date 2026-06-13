@@ -85,7 +85,7 @@ class TimingConstraintsTest {
     @Test fun end_raised_to_start_plus_1ms_when_too_close() {
         val (s, e) = TimingConstraints.constrain(SubTime.ofMillis(5_000), SubTime.ofMillis(5_000), 10_000)
         assertEquals(5_000L, s.millis)
-        assertEquals("最小持续 1ms", 5_001L, e.millis)
+        assertEquals(5_001L, e.millis, "最小持续 1ms")
     }
 
     @Test fun end_raised_when_before_start() {
