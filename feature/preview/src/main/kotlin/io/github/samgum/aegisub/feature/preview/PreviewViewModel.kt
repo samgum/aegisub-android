@@ -252,6 +252,11 @@ class PreviewViewModel @Inject constructor(
         session.editEvent(eventId) { it.copy(text = VisualTags.removeMove(it.text)) }
     }
 
+    /** 直接写入选中行文本（用于 Karaoke 音节计时重建等）。 */
+    fun setEventText(eventId: Long, text: String) {
+        session.editEvent(eventId) { it.copy(text = text) }
+    }
+
     /** 选中上一行（并 seek 到其起始）。 */
     fun selectPrevEvent() {
         val script = session.script.value ?: return

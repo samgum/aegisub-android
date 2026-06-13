@@ -75,6 +75,7 @@ import io.github.samgum.aegisub.feature.preview.components.NudgeTarget
 import io.github.samgum.aegisub.feature.preview.components.PlayerSurface
 import io.github.samgum.aegisub.feature.preview.components.SubtitleOverlay
 import io.github.samgum.aegisub.feature.preview.components.AudioTimeline
+import io.github.samgum.aegisub.feature.preview.components.KaraokeTimeline
 import io.github.samgum.aegisub.feature.preview.components.SpectrogramView
 import io.github.samgum.aegisub.feature.preview.components.TimingEditPanel
 import io.github.samgum.aegisub.feature.preview.components.VisualToolMode
@@ -201,6 +202,7 @@ private fun VideoBlock(
     var showSpectrogram by remember { mutableStateOf(false) }
     var vtMode by remember { mutableStateOf(false) }
     var vtToolMode by remember { mutableStateOf(VisualToolMode.POSITION) }
+    var karaokeMode by remember { mutableStateOf(false) }
     val selectedEvent = state.script.events.firstOrNull { it.id == state.selectedEventId }
     val playResX = state.script.getScriptInfo("PlayResX")?.toIntOrNull() ?: 384
     val playResY = state.script.getScriptInfo("PlayResY")?.toIntOrNull() ?: 288
@@ -265,6 +267,20 @@ private fun VideoBlock(
                 onClearMove = { viewModel.clearEventMove(selectedEvent.id) },
             )
         }
+        // Karaoke 音节计时：拖拽音节边界逐音节调 {\k} 时长
+        if (karaokeMode && selectedEvent != null) {
+            Text(
+                "Karaoke 计时：拖拽音节分隔条在相邻音节间挪动时长",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+            )
+            KaraokeTimeline(
+                text = selectedEvent.text,
+                onCommit = { viewModel.setEventText(selectedEvent.id, it) },
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+        }
         // 音频可视化切换：波形 / 频谱 + 可视化打字开关
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -275,6 +291,9 @@ private fun VideoBlock(
             }
             TextButton(onClick = { vtMode = !vtMode }) {
                 Text(if (vtMode) "退出可视化打字" else "可视化打字")
+            }
+            TextButton(onClick = { karaokeMode = !karaokeMode }) {
+                Text(if (karaokeMode) "退出Karaoke计时" else "Karaoke计时")
             }
         }
         val waveform by viewModel.waveform.collectAsStateWithLifecycle()
