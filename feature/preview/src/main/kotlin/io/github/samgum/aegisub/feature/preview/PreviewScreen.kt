@@ -640,6 +640,54 @@ private fun PlaybackControls(
 }
 
 /**
+ * 顶部工具栏（仿桌面 Aegisub）：撤销/重做/播放/逐帧/时间/倍速/换片。
+ * 横屏主导，一行常驻。
+ *
+ * @author 伤感咩吖
+ */
+@Composable
+private fun PreviewToolbar(state: PreviewUiState.Loaded, viewModel: PreviewViewModel) {
+    val canUndo by viewModel.canUndo.collectAsStateWithLifecycle()
+    val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = viewModel::undo, enabled = canUndo) {
+            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "撤销")
+        }
+        IconButton(onClick = viewModel::redo, enabled = canRedo) {
+            Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "重做")
+        }
+        IconButton(onClick = viewModel::playPause) {
+            Icon(
+                if (state.playback.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                contentDescription = "播放/暂停",
+            )
+        }
+        IconButton(onClick = viewModel::frameStepBack, enabled = state.playback.isReady) {
+            Text("◀▏", style = MaterialTheme.typography.labelSmall)
+        }
+        IconButton(onClick = viewModel::frameStepForward, enabled = state.playback.isReady) {
+            Text("▕▶", style = MaterialTheme.typography.labelSmall)
+        }
+        Text(
+            "${formatTime(state.playback.positionMs)} / ${formatTime(state.playback.durationMs)}",
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+        Spacer(Modifier.weight(1f))
+        if (state.playback.fps > 0f) {
+            Text(
+                "${"%.2f".format(state.playback.fps)}fps",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
+    }
+}
+
+/**
  * 波形/频谱带：切换 + AudioTimeline/SpectrogramView。
  */
 @Composable
@@ -818,8 +866,13 @@ private fun ExpandedPreview(
     var vtToolMode by remember { mutableStateOf(VisualToolMode.POSITION) }
     var karaokeMode by remember { mutableStateOf(false) }
     var showSpectrogram by remember { mutableStateOf(false) }
+    var sortKey by remember { mutableStateOf<io.github.samgum.aegisub.domain.edit.SortKey?>(null) }
+    var sortOrder by remember { mutableStateOf(io.github.samgum.aegisub.domain.edit.SortOrder.ASCENDING) }
     val selected = state.script.events.firstOrNull { it.id == state.selectedEventId }
-    Row(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize()) {
+        // 顶部工具栏（仿桌面 Aegisub）：撤销/重做/播放/换片 + seek 时间
+        PreviewToolbar(state, viewModel)
+        Row(Modifier.fillMaxSize().weight(1f)) {
         // 左：视频(上, 固定高度不溢出) + 字幕网格(下，占剩余)
         Column(Modifier.weight(0.60f)) {
             VideoBlock(
@@ -836,6 +889,19 @@ private fun ExpandedPreview(
                 currentEventId = state.currentEventId,
                 selectedEventId = state.selectedEventId,
                 onSelect = viewModel::selectEvent,
+                sortKey = sortKey,
+                sortOrder = sortOrder,
+                onSort = { key ->
+                    if (sortKey == key) {
+                        sortOrder = if (sortOrder == io.github.samgum.aegisub.domain.edit.SortOrder.ASCENDING)
+                            io.github.samgum.aegisub.domain.edit.SortOrder.DESCENDING
+                        else io.github.samgum.aegisub.domain.edit.SortOrder.ASCENDING
+                    } else {
+                        sortKey = key
+                        sortOrder = io.github.samgum.aegisub.domain.edit.SortOrder.ASCENDING
+                    }
+                    viewModel.sortLines(key, sortOrder)
+                },
                 modifier = Modifier.weight(1f),
             )
         }
@@ -902,6 +968,7 @@ private fun ExpandedPreview(
                 )
             }
         }
+        } // close outer Column
     }
 }
 
@@ -917,10 +984,13 @@ private fun SubtitleGrid(
     currentEventId: Long?,
     selectedEventId: Long?,
     onSelect: (Long) -> Unit,
+    sortKey: io.github.samgum.aegisub.domain.edit.SortKey?,
+    sortOrder: io.github.samgum.aegisub.domain.edit.SortOrder,
+    onSort: (io.github.samgum.aegisub.domain.edit.SortKey) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier) {
-        // 表头
+        // 表头（点击列头排序，仿桌面 Aegisub）
         Row(
             Modifier
                 .fillMaxWidth()
@@ -929,9 +999,15 @@ private fun SubtitleGrid(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("#", Modifier.weight(0.05f), style = MaterialTheme.typography.labelMedium)
-            Text("开始", Modifier.weight(0.19f), style = MaterialTheme.typography.labelMedium)
-            Text("结束", Modifier.weight(0.19f), style = MaterialTheme.typography.labelMedium)
-            Text("样式", Modifier.weight(0.14f), style = MaterialTheme.typography.labelMedium)
+            SortHeader("开始", Modifier.weight(0.19f), sortKey == io.github.samgum.aegisub.domain.edit.SortKey.START, sortOrder) {
+                onSort(io.github.samgum.aegisub.domain.edit.SortKey.START)
+            }
+            SortHeader("结束", Modifier.weight(0.19f), sortKey == io.github.samgum.aegisub.domain.edit.SortKey.END, sortOrder) {
+                onSort(io.github.samgum.aegisub.domain.edit.SortKey.END)
+            }
+            SortHeader("样式", Modifier.weight(0.14f), sortKey == io.github.samgum.aegisub.domain.edit.SortKey.STYLE, sortOrder) {
+                onSort(io.github.samgum.aegisub.domain.edit.SortKey.STYLE)
+            }
             Text("文本", Modifier.weight(0.43f), style = MaterialTheme.typography.labelMedium)
         }
         HorizontalDivider()
@@ -947,6 +1023,23 @@ private fun SubtitleGrid(
             }
         }
     }
+}
+
+/** 可排序的表头单元格：点击切换升/降序，显示箭头指示。 */
+@Composable
+private fun SortHeader(
+    label: String,
+    modifier: Modifier,
+    active: Boolean,
+    order: io.github.samgum.aegisub.domain.edit.SortOrder,
+    onClick: () -> Unit,
+) {
+    Text(
+        "$label ${if (active) (if (order == io.github.samgum.aegisub.domain.edit.SortOrder.ASCENDING) "↑" else "↓") else ""}",
+        modifier = modifier.clickable(onClick = onClick),
+        style = MaterialTheme.typography.labelMedium,
+        color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+    )
 }
 
 @Composable

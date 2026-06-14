@@ -300,6 +300,11 @@ class PreviewViewModel @Inject constructor(
     fun undo() = session.undo()
     fun redo() = session.redo()
 
+    /** 排序（仿桌面 Aegisub 网格列头排序，单撤销点）。 */
+    fun sortLines(key: io.github.samgum.aegisub.domain.edit.SortKey, order: io.github.samgum.aegisub.domain.edit.SortOrder) {
+        session.editEvents { io.github.samgum.aegisub.domain.edit.SortLines.apply(it, key, order) }
+    }
+
     /** 在当前播放位置加一个书签。 */
     fun addBookmark(label: String) {
         viewModelScope.launch {
