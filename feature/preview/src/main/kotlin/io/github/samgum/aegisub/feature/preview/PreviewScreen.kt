@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -71,6 +73,7 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlin.math.roundToInt
@@ -221,6 +224,7 @@ private fun VideoBlock(
     vtActive: Boolean,
     vtToolMode: VisualToolMode,
     onVtToolModeChange: (VisualToolMode) -> Unit,
+    videoMaxHeight: Dp,
     modifier: Modifier = Modifier,
 ) {
     val selectedEvent = state.script.events.firstOrNull { it.id == state.selectedEventId }
@@ -231,6 +235,7 @@ private fun VideoBlock(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
+                .heightIn(max = videoMaxHeight)
                 .background(Color.Black),
             contentAlignment = Alignment.Center,
         ) {
@@ -631,69 +636,266 @@ private fun PlaybackControls(
     }
 }
 
+/**
+ * 波形/频谱带：切换 + AudioTimeline/SpectrogramView。
+ */
+@Composable
+private fun AudioBand(
+    state: PreviewUiState.Loaded,
+    viewModel: PreviewViewModel,
+    showSpectrogram: Boolean,
+    onShowSpectrogramChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val waveform by viewModel.waveform.collectAsStateWithLifecycle()
+    val spectrogram by viewModel.spectrogram.collectAsStateWithLifecycle()
+    Column(modifier) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FilterChip(selected = !showSpectrogram, onClick = { onShowSpectrogramChange(false) }, label = { Text("波形") })
+            Spacer(Modifier.width(6.dp))
+            FilterChip(selected = showSpectrogram, onClick = { onShowSpectrogramChange(true) }, label = { Text("频谱") })
+        }
+        if (showSpectrogram) {
+            SpectrogramView(
+                data = spectrogram,
+                positionMs = state.playback.positionMs,
+                durationMs = state.playback.durationMs,
+            )
+        } else {
+            AudioTimeline(
+                waveform = waveform,
+                events = state.script.events,
+                selectedEventId = state.selectedEventId,
+                positionMs = state.playback.positionMs,
+                durationMs = state.playback.durationMs,
+                onCommitDrag = { id, startMs, endMs ->
+                    viewModel.editEventTimes(id, SubTime.ofMillis(startMs), SubTime.ofMillis(endMs))
+                    viewModel.selectEvent(id)
+                },
+            )
+        }
+    }
+}
+
+/** 书签区：在当前位加书签 + 列表跳转/删除。 */
+@Composable
+private fun BookmarksSection(
+    state: PreviewUiState.Loaded,
+    viewModel: PreviewViewModel,
+    modifier: Modifier = Modifier,
+) {
+    val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
+    Column(modifier.fillMaxWidth()) {
+        HorizontalDivider(Modifier.padding(vertical = 6.dp))
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("书签", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Button(onClick = { viewModel.addBookmark("") }) { Text("加书签") }
+        }
+        if (bookmarks.isEmpty()) {
+            Text("暂无书签", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp))
+        } else {
+            bookmarks.forEach { bm ->
+                ListItem(
+                    headlineContent = { Text(bm.label.ifBlank { "书签 ${formatTime(bm.timeMs)}" }) },
+                    supportingContent = { Text(formatTime(bm.timeMs), style = MaterialTheme.typography.bodySmall) },
+                    trailingContent = {
+                        Row {
+                            TextButton(onClick = { viewModel.seekToBookmark(bm.timeMs) }) { Text("跳转") }
+                            TextButton(onClick = { viewModel.deleteBookmark(bm.id) }) { Text("删除") }
+                        }
+                    },
+                    modifier = Modifier.clickable { viewModel.seekToBookmark(bm.timeMs) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 竖屏预览：视频（限高）+ 打轴工具栏（上/下/设起始/设结束）+ 波形带（默认）/打字/Karao
+ * + 字幕列表（占满剩余，始终可见可达）。波形与列表同屏，恢复一屏打轴工作流。
+ */
 @Composable
 private fun CompactPreview(
     state: PreviewUiState.Loaded,
     viewModel: PreviewViewModel,
     onPickVideo: () -> Unit,
 ) {
-    var panel by remember { mutableStateOf(PreviewPanel.SUBTITLES) }
+    var vtActive by remember { mutableStateOf(false) }
     var vtToolMode by remember { mutableStateOf(VisualToolMode.POSITION) }
+    var karaokeMode by remember { mutableStateOf(false) }
     var showSpectrogram by remember { mutableStateOf(false) }
+    val selected = state.script.events.firstOrNull { it.id == state.selectedEventId }
     Column(Modifier.fillMaxSize()) {
         VideoBlock(
             state = state,
             viewModel = viewModel,
             onPickVideo = onPickVideo,
-            vtActive = panel == PreviewPanel.TYPES && state.hasMedia,
+            vtActive = vtActive && selected != null && state.hasMedia,
             vtToolMode = vtToolMode,
             onVtToolModeChange = { vtToolMode = it },
+            videoMaxHeight = 200.dp,
         )
-        PreviewTabs(panel = panel, onPanelChange = { panel = it })
-        PreviewPanelContent(
-            panel = panel,
-            state = state,
-            viewModel = viewModel,
-            showSpectrogram = showSpectrogram,
-            onShowSpectrogramChange = { showSpectrogram = it },
-            vtToolMode = vtToolMode,
-            onVtToolModeChange = { vtToolMode = it },
+        // 打轴工具栏 + 切换
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = viewModel::selectPrevEvent, enabled = selected != null) {
+                Icon(Icons.Filled.SkipPrevious, contentDescription = "上一行")
+            }
+            Button(onClick = { selected?.let { viewModel.setStartToPosition(it.id) } }, enabled = selected != null) { Text("设起始") }
+            Button(onClick = { selected?.let { viewModel.setEndToPosition(it.id) } }, enabled = selected != null) { Text("设结束") }
+            IconButton(onClick = viewModel::selectNextEvent, enabled = selected != null) {
+                Icon(Icons.Filled.SkipNext, contentDescription = "下一行")
+            }
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = { showSpectrogram = !showSpectrogram }) {
+                Text(if (showSpectrogram) "波形" else "频谱")
+            }
+            TextButton(onClick = { vtActive = !vtActive }) {
+                Text(if (vtActive) "退出打字" else "打字")
+            }
+            TextButton(onClick = { karaokeMode = !karaokeMode }) {
+                Text(if (karaokeMode) "退出Karao" else "Karao")
+            }
+        }
+        // 中间区：默认波形带；打字/Karao 激活时换为对应控件（仍保留列表可见）
+        if (vtActive && selected != null && state.hasMedia) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 170.dp).verticalScroll(rememberScrollState())) {
+                VisualTypesettingControls(
+                    event = selected,
+                    toolMode = vtToolMode,
+                    onToolModeChange = { vtToolMode = it },
+                    onRotationChange = { viewModel.setEventRotation(selected.id, it) },
+                    onFadeChange = { f, fo -> viewModel.setEventFade(selected.id, f, fo) },
+                    onClearPos = { viewModel.clearEventPos(selected.id) },
+                    onClearMove = { viewModel.clearEventMove(selected.id) },
+                    onClipChange = { x1, y1, x2, y2, inv -> viewModel.setEventClip(selected.id, x1, y1, x2, y2, inv) },
+                    onClearClip = { viewModel.clearEventClip(selected.id) },
+                )
+            }
+        } else if (karaokeMode && selected != null) {
+            KaraokeTimeline(
+                text = selected.text,
+                onCommit = { viewModel.setEventText(selected.id, it) },
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+        } else {
+            AudioBand(state, viewModel, showSpectrogram, { showSpectrogram = it }, Modifier.height(110.dp).fillMaxWidth())
+        }
+        // 字幕列表：占满剩余，始终可见可达（打轴时点行即跳转 + 选中）
+        EventListColumn(
+            events = state.script.events,
+            currentEventId = state.currentEventId,
+            selectedEventId = state.selectedEventId,
+            onSelect = viewModel::selectEvent,
             modifier = Modifier.weight(1f),
         )
     }
 }
 
+/**
+ * 横屏预览（主要形态）：三栏同屏 —— 左（视频+字幕列表）/ 中（打轴时间编辑+书签）/ 右（波形/打字/Karao）。
+ * 视频限高避免叠加渲染溢出；波形与列表同屏，对齐桌面 Aegisub 工作流。
+ */
 @Composable
 private fun ExpandedPreview(
     state: PreviewUiState.Loaded,
     viewModel: PreviewViewModel,
     onPickVideo: () -> Unit,
 ) {
-    var panel by remember { mutableStateOf(PreviewPanel.SUBTITLES) }
+    var vtActive by remember { mutableStateOf(false) }
     var vtToolMode by remember { mutableStateOf(VisualToolMode.POSITION) }
+    var karaokeMode by remember { mutableStateOf(false) }
     var showSpectrogram by remember { mutableStateOf(false) }
+    val selected = state.script.events.firstOrNull { it.id == state.selectedEventId }
     Row(Modifier.fillMaxSize()) {
-        VideoBlock(
-            state = state,
-            viewModel = viewModel,
-            onPickVideo = onPickVideo,
-            vtActive = panel == PreviewPanel.TYPES && state.hasMedia,
-            vtToolMode = vtToolMode,
-            onVtToolModeChange = { vtToolMode = it },
-            modifier = Modifier.weight(0.55f),
-        )
-        Column(modifier = Modifier.weight(0.45f)) {
-            PreviewTabs(panel = panel, onPanelChange = { panel = it })
-            PreviewPanelContent(
-                panel = panel,
+        // 左：视频 + 字幕列表
+        Column(Modifier.weight(0.34f)) {
+            VideoBlock(
                 state = state,
                 viewModel = viewModel,
-                showSpectrogram = showSpectrogram,
-                onShowSpectrogramChange = { showSpectrogram = it },
+                onPickVideo = onPickVideo,
+                vtActive = vtActive && selected != null && state.hasMedia,
                 vtToolMode = vtToolMode,
                 onVtToolModeChange = { vtToolMode = it },
-                modifier = Modifier.fillMaxSize(),
+                videoMaxHeight = 220.dp,
             )
+            EventListColumn(
+                events = state.script.events,
+                currentEventId = state.currentEventId,
+                selectedEventId = state.selectedEventId,
+                onSelect = viewModel::selectEvent,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        // 中：打轴（时间编辑）+ 书签
+        Column(
+            Modifier.weight(0.30f).verticalScroll(rememberScrollState()).padding(4.dp),
+        ) {
+            if (selected != null) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = viewModel::selectPrevEvent) {
+                        Icon(Icons.Filled.SkipPrevious, contentDescription = "上一行")
+                    }
+                    Button(onClick = { viewModel.setStartToPosition(selected.id) }) { Text("设起始") }
+                    Button(onClick = { viewModel.setEndToPosition(selected.id) }) { Text("设结束") }
+                    IconButton(onClick = viewModel::selectNextEvent) {
+                        Icon(Icons.Filled.SkipNext, contentDescription = "下一行")
+                    }
+                }
+                TimingEditLayer(state = state, viewModel = viewModel)
+            } else {
+                Text(stringResource(R.string.timing_pick_row), modifier = Modifier.padding(16.dp))
+            }
+            BookmarksSection(state = state, viewModel = viewModel)
+        }
+        // 右：波形 / 打字 / Karao
+        Column(Modifier.weight(0.36f)) {
+            Row(
+                Modifier.fillMaxWidth().padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { showSpectrogram = !showSpectrogram }) {
+                    Text(if (showSpectrogram) "波形" else "频谱")
+                }
+                TextButton(onClick = { vtActive = !vtActive }) {
+                    Text(if (vtActive) "退出打字" else "打字")
+                }
+                TextButton(onClick = { karaokeMode = !karaokeMode }) {
+                    Text(if (karaokeMode) "退出Karao" else "Karao")
+                }
+            }
+            if (vtActive && selected != null && state.hasMedia) {
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    VisualTypesettingControls(
+                        event = selected,
+                        toolMode = vtToolMode,
+                        onToolModeChange = { vtToolMode = it },
+                        onRotationChange = { viewModel.setEventRotation(selected.id, it) },
+                        onFadeChange = { f, fo -> viewModel.setEventFade(selected.id, f, fo) },
+                        onClearPos = { viewModel.clearEventPos(selected.id) },
+                        onClearMove = { viewModel.clearEventMove(selected.id) },
+                        onClipChange = { x1, y1, x2, y2, inv -> viewModel.setEventClip(selected.id, x1, y1, x2, y2, inv) },
+                        onClearClip = { viewModel.clearEventClip(selected.id) },
+                    )
+                }
+            } else if (karaokeMode && selected != null) {
+                KaraokeTimeline(
+                    text = selected.text,
+                    onCommit = { viewModel.setEventText(selected.id, it) },
+                    modifier = Modifier.padding(8.dp),
+                )
+            } else {
+                AudioBand(state, viewModel, showSpectrogram, { showSpectrogram = it }, Modifier.weight(1f))
+            }
         }
     }
 }
