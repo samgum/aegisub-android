@@ -191,9 +191,13 @@ fun EditorScreen(
                     .fillMaxSize()
                     .onPreviewKeyEvent { event ->
                         val action = hotkeys.match(event) ?: return@onPreviewKeyEvent false
-                        handleEditorHotkey(action, viewModel, editingId) {
-                            showFindReplace = true
-                        } ?: false
+                        when (action) {
+                            HotkeyAction.SAVE -> true // 已防抖自动保存，消费即可
+                            HotkeyAction.EXPORT -> { showExportFormat = true; true }
+                            else -> handleEditorHotkey(action, viewModel, editingId) {
+                                showFindReplace = true
+                            } ?: false
+                        }
                     },
             ) {
                 if (isCompact) {
