@@ -62,6 +62,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -71,6 +72,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toPersistentList
+import io.github.samgum.aegisub.data.hotkeys.rememberHotkeyController
+import io.github.samgum.aegisub.domain.edit.HotkeyAction
 import io.github.samgum.aegisub.data.settings.LayoutMode
 import io.github.samgum.aegisub.feature.editor.R
 import io.github.samgum.aegisub.domain.edit.FramerateConverter
@@ -89,6 +92,7 @@ import io.github.samgum.aegisub.domain.model.AssScript
 import io.github.samgum.aegisub.feature.editor.compact.EventEditSheet
 import io.github.samgum.aegisub.feature.editor.compact.EventListScreen
 import io.github.samgum.aegisub.feature.editor.components.EditorActions
+import io.github.samgum.aegisub.feature.editor.components.LineAction
 import io.github.samgum.aegisub.feature.editor.components.SelectionActionBar
 import io.github.samgum.aegisub.feature.editor.components.StylingAssistantSheet
 import io.github.samgum.aegisub.feature.editor.components.TranslationAssistantSheet
@@ -114,6 +118,7 @@ fun EditorScreen(
     val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
     val layoutMode by viewModel.layoutMode.collectAsStateWithLifecycle()
     val snapshots by viewModel.snapshotList.collectAsStateWithLifecycle()
+    val hotkeys = rememberHotkeyController()
     var editingId by remember { mutableStateOf<Long?>(null) }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
@@ -181,7 +186,16 @@ fun EditorScreen(
                 LayoutMode.EXPANDED -> false
                 LayoutMode.AUTO -> LocalConfiguration.current.screenWidthDp < 600
             }
-            Box(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .onPreviewKeyEvent { event ->
+                        val action = hotkeys.match(event) ?: return@onPreviewKeyEvent false
+                        handleEditorHotkey(action, viewModel, editingId) {
+                            showFindReplace = true
+                        } ?: false
+                    },
+            ) {
                 if (isCompact) {
                     CompactEditor(
                         script = s.script,
@@ -493,6 +507,32 @@ private fun currentSelectedStart(state: EditorUiState, editingId: Long?): Long? 
     val loaded = state as? EditorUiState.Loaded ?: return null
     val ev = loaded.script.events.firstOrNull { it.id == editingId } ?: return null
     return ev.start.millis
+}
+
+/**
+ * 编辑器热键分发：返回 true=已处理（消费事件），null=非编辑器动作（放行给文本框等）。
+ *
+ * @author 伤感咩吖
+ */
+private fun handleEditorHotkey(
+    action: HotkeyAction,
+    viewModel: EditorViewModel,
+    editingId: Long?,
+    onFindReplace: () -> Unit,
+): Boolean? = when (action) {
+    HotkeyAction.UNDO -> { viewModel.undo(); true }
+    HotkeyAction.REDO -> { viewModel.redo(); true }
+    HotkeyAction.FIND_REPLACE -> { onFindReplace(); true }
+    HotkeyAction.DUPLICATE_LINE -> { editingId?.let { viewModel.applyLineAction(it, LineAction.DUPLICATE) }; true }
+    HotkeyAction.DELETE_LINE -> { editingId?.let { viewModel.applyLineAction(it, LineAction.DELETE) }; true }
+    HotkeyAction.SPLIT_LINE -> { editingId?.let { viewModel.applyLineAction(it, LineAction.SPLIT) }; true }
+    HotkeyAction.JOIN_KEEP_FIRST, HotkeyAction.JOIN_CONCAT -> {
+        editingId?.let { viewModel.applyLineAction(it, LineAction.JOIN_NEXT) }; true
+    }
+    HotkeyAction.MOVE_LINE_UP -> { editingId?.let { viewModel.applyLineAction(it, LineAction.MOVE_UP) }; true }
+    HotkeyAction.MOVE_LINE_DOWN -> { editingId?.let { viewModel.applyLineAction(it, LineAction.MOVE_DOWN) }; true }
+    HotkeyAction.INSERT_AFTER -> { editingId?.let { viewModel.applyLineAction(it, LineAction.INSERT_AFTER) }; true }
+    else -> null // 预览专属动作（播放/打轴等）放行
 }
 
 @Composable

@@ -79,6 +79,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlin.math.roundToInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.samgum.aegisub.data.hotkeys.rememberHotkeyController
+import io.github.samgum.aegisub.domain.edit.HotkeyAction
 import io.github.samgum.aegisub.domain.edit.VisualTags
 import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.time.SubTime
@@ -109,6 +111,7 @@ fun PreviewScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val canUndo by viewModel.canUndo.collectAsStateWithLifecycle()
     val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
+    val hotkeys = rememberHotkeyController()
     val context = LocalContext.current
 
     val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -154,25 +157,24 @@ fun PreviewScreen(
                 .focusRequester(focusRequester)
                 .focusable()
                 .onPreviewKeyEvent { event ->
-                    if (event.type != KeyEventType.KeyDown) {
-                        false
-                    } else {
-                        val selectedId = (state as? PreviewUiState.Loaded)?.selectedEventId
-                        when {
-                            event.key == Key.Spacebar -> { viewModel.playPause(); true }
-                            // Shift+左/右 = 逐帧后退/前进（桌面端 Ctrl+左/右 等价的帧级步进）
-                            event.isShiftPressed && event.key == Key.DirectionLeft -> { viewModel.frameStepBack(); true }
-                            event.isShiftPressed && event.key == Key.DirectionRight -> { viewModel.frameStepForward(); true }
-                            event.key == Key.DirectionLeft -> { viewModel.seekRelative(-5_000); true }
-                            event.key == Key.DirectionRight -> { viewModel.seekRelative(5_000); true }
-                            event.isCtrlPressed && event.key == Key.Z -> { viewModel.undo(); true }
-                            // 桌面端 Aegisub timing 热键约定：W 上行 / A 设起始 / S 设结束 / D 提交并下行
-                            event.key == Key.W -> { viewModel.selectPrevEvent(); true }
-                            event.key == Key.A && selectedId != null -> { viewModel.setStartToPosition(selectedId); true }
-                            event.key == Key.S && selectedId != null -> { viewModel.setEndToPosition(selectedId); true }
-                            event.key == Key.D -> { viewModel.selectNextEvent(); true }
-                            else -> false
+                    val action = hotkeys.match(event) ?: return@onPreviewKeyEvent false
+                    val selectedId = (state as? PreviewUiState.Loaded)?.selectedEventId
+                    when (action) {
+                        HotkeyAction.PLAY_PAUSE -> { viewModel.playPause(); true }
+                        HotkeyAction.SEEK_BACK -> { viewModel.seekRelative(-5_000); true }
+                        HotkeyAction.SEEK_FORWARD -> { viewModel.seekRelative(5_000); true }
+                        HotkeyAction.FRAME_BACK -> { viewModel.frameStepBack(); true }
+                        HotkeyAction.FRAME_FORWARD -> { viewModel.frameStepForward(); true }
+                        HotkeyAction.SELECT_PREV -> { viewModel.selectPrevEvent(); true }
+                        HotkeyAction.SELECT_NEXT -> { viewModel.selectNextEvent(); true }
+                        HotkeyAction.SET_START_TO_POS -> {
+                            selectedId?.let { viewModel.setStartToPosition(it) }; true
                         }
+                        HotkeyAction.SET_END_TO_POS -> {
+                            selectedId?.let { viewModel.setEndToPosition(it) }; true
+                        }
+                        HotkeyAction.UNDO -> { viewModel.undo(); true }
+                        else -> false
                     }
                 },
         ) {

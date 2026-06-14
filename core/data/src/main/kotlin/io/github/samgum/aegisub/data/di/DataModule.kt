@@ -21,11 +21,17 @@ import io.github.samgum.aegisub.data.repository.RoomProjectRepository
 import io.github.samgum.aegisub.data.repository.RoomSnapshotRepository
 import io.github.samgum.aegisub.data.repository.SnapshotRepository
 import io.github.samgum.aegisub.data.settings.DataStoreSettingsRepository
+import io.github.samgum.aegisub.data.settings.DataStoreHotkeyConfigRepository
+import io.github.samgum.aegisub.data.settings.HotkeyConfigRepository
 import io.github.samgum.aegisub.data.settings.SettingsRepository
+import javax.inject.Named
 import javax.inject.Singleton
 
 /** 设置 DataStore 单例（应用级，name=settings）。 */
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+
+/** 热键配置 DataStore 单例（应用级，name=hotkeys）。 */
+private val Context.hotkeysDataStore: DataStore<Preferences> by preferencesDataStore(name = "hotkeys")
 
 /**
  * Hilt 依赖注入：提供 Room 数据库、DAO、仓储、设置 DataStore 的单例。
@@ -70,11 +76,23 @@ object DataModule {
 
     @Provides
     @Singleton
+    @Named("settings")
     fun provideSettingsDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
         context.settingsDataStore
 
     @Provides
     @Singleton
-    fun provideSettingsRepository(store: DataStore<Preferences>): SettingsRepository =
+    fun provideSettingsRepository(@Named("settings") store: DataStore<Preferences>): SettingsRepository =
         DataStoreSettingsRepository(store)
+
+    @Provides
+    @Singleton
+    @Named("hotkeys")
+    fun provideHotkeysDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
+        context.hotkeysDataStore
+
+    @Provides
+    @Singleton
+    fun provideHotkeyConfigRepository(@Named("hotkeys") store: DataStore<Preferences>): HotkeyConfigRepository =
+        DataStoreHotkeyConfigRepository(store)
 }
