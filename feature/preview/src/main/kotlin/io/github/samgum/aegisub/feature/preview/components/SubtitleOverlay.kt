@@ -87,21 +87,25 @@ fun SubtitleOverlay(
                 marginRightPx = marginRightPx,
                 marginVerticalPx = marginTopPx,
             )
+            // 钳制到画面内：避免 {\pos} 锚点或 PlayResY 失配导致字幕跑出画面（顶部/底部）看不见。
+            val maxTx = (size.width - layout.size.width).coerceAtLeast(0f)
+            val maxTy = (size.height - layout.size.height).coerceAtLeast(0f)
+            val drawAt = Offset(topLeft.x.coerceIn(0f, maxTx), topLeft.y.coerceIn(0f, maxTy))
             if (shadowPx > 0f) {
                 drawText(
                     textLayoutResult = layout,
-                    topLeft = Offset(topLeft.x + shadowPx, topLeft.y + shadowPx),
+                    topLeft = Offset(drawAt.x + shadowPx, drawAt.y + shadowPx),
                 )
             }
             if (outlinePx > 0f) {
                 drawText(
                     textLayoutResult = layout,
-                    topLeft = topLeft,
+                    topLeft = drawAt,
                     color = style.outline.toColor(),
                     drawStyle = Stroke(width = outlinePx),
                 )
             }
-            drawText(textLayoutResult = layout, topLeft = topLeft)
+            drawText(textLayoutResult = layout, topLeft = drawAt)
         }
     }
 }
