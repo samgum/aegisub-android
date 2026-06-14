@@ -232,11 +232,11 @@ private fun VideoBlock(
     val playResX = state.script.getScriptInfo("PlayResX")?.toIntOrNull() ?: 384
     val playResY = state.script.getScriptInfo("PlayResY")?.toIntOrNull() ?: 288
     Column(modifier) {
+        // 视频区固定高度（不再 aspectRatio+heightIn，避免在 weight 配额里溢出重叠到下方网格）
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .heightIn(max = videoMaxHeight)
+                .height(videoMaxHeight)
                 .background(Color.Black),
             contentAlignment = Alignment.Center,
         ) {
@@ -818,7 +818,7 @@ private fun ExpandedPreview(
     var showSpectrogram by remember { mutableStateOf(false) }
     val selected = state.script.events.firstOrNull { it.id == state.selectedEventId }
     Row(Modifier.fillMaxSize()) {
-        // 左：视频(上) + 字幕网格(下，宽幅主导)
+        // 左：视频(上, 固定高度不溢出) + 字幕网格(下，占剩余)
         Column(Modifier.weight(0.60f)) {
             VideoBlock(
                 state = state,
@@ -827,15 +827,14 @@ private fun ExpandedPreview(
                 vtActive = vtActive && selected != null && state.hasMedia,
                 vtToolMode = vtToolMode,
                 onVtToolModeChange = { vtToolMode = it },
-                videoMaxHeight = 200.dp,
-                modifier = Modifier.weight(0.32f),
+                videoMaxHeight = 160.dp,
             )
             SubtitleGrid(
                 events = state.script.events,
                 currentEventId = state.currentEventId,
                 selectedEventId = state.selectedEventId,
                 onSelect = viewModel::selectEvent,
-                modifier = Modifier.weight(0.68f),
+                modifier = Modifier.weight(1f),
             )
         }
         // 右：波形/打字/Karao(上，主体) + 打轴工具栏(下)
