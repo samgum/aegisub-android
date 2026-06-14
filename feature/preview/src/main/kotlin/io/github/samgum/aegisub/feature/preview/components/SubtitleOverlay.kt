@@ -48,13 +48,16 @@ fun SubtitleOverlay(
             val style = info.style
             val scaleY = (size.height / info.playResY.coerceAtLeast(1)).toFloat()
             val scaleX = (size.width / info.playResX.coerceAtLeast(1)).toFloat()
-            // 字号封顶：不超过画布高 18%，避免 PlayResY 失配（如缺省 288 配 HD 内容）时过大
+            // 字号保守：按 PlayResY 缩放，但封顶到画布高 11%（多数底部字幕视觉占比），
+            // 避免 PlayResY 失配（缺省 288 配 HD 内容）时字号爆炸。
             val rawFontPx = (style.fontSize * scaleY).toFloat()
-            val fontPx = rawFontPx.coerceIn(1f, size.height * 0.18f)
+            val fontPx = rawFontPx.coerceIn(1f, size.height * 0.11f)
             val fontScaleUsed = fontPx / (style.fontSize.coerceAtLeast(0.0001).toFloat())
+            // 描边宽度直接用 outlineWidth*scale（不 *2），且不粗于字号 14%，确保填充主导、不"中空"
             val outlinePx = (style.outlineWidth * fontScaleUsed).toFloat()
-                .coerceAtMost(fontPx * 0.22f) // 描边不粗于字号 22%，避免盖住填充致"中空"
+                .coerceIn(0f, fontPx * 0.14f)
             val shadowPx = (style.shadowWidth * fontScaleUsed).toFloat()
+                .coerceAtMost(fontPx * 0.3f)
             val marginLeftPx = info.margins.left * scaleX
             val marginRightPx = info.margins.right * scaleX
             val marginTopPx = info.margins.vertical * scaleY
@@ -95,7 +98,7 @@ fun SubtitleOverlay(
                     textLayoutResult = layout,
                     topLeft = topLeft,
                     color = style.outline.toColor(),
-                    drawStyle = Stroke(width = outlinePx * 2f),
+                    drawStyle = Stroke(width = outlinePx),
                 )
             }
             drawText(textLayoutResult = layout, topLeft = topLeft)

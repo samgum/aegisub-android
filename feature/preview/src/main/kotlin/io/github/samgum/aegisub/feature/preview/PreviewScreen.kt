@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Redo
@@ -891,14 +892,114 @@ private fun ExpandedPreview(
                 )
             }
         }
+        // 选中行文本编辑条（仿桌面端编辑框）
+        selected?.let { ev ->
+            var editText by remember(ev.id) { mutableStateOf(ev.text) }
+            OutlinedTextField(
+                value = editText,
+                onValueChange = {
+                    editText = it
+                    viewModel.setEventText(ev.id, it)
+                },
+                label = { Text("文本（${ev.style}）") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+            )
+        }
         HorizontalDivider()
-        // 下半：宽幅字幕列表（主导工作区，点行选中并 seek 到起始）
-        EventListColumn(
+        // 下半：桌面端风格字幕网格（# | 开始 | 结束 | 样式 | 文本），宽幅主导工作区
+        SubtitleGrid(
             events = state.script.events,
             currentEventId = state.currentEventId,
             selectedEventId = state.selectedEventId,
             onSelect = viewModel::selectEvent,
             modifier = Modifier.weight(0.5f),
+        )
+    }
+}
+
+/**
+ * 桌面端风格字幕网格：表头 + 多列表格行（# | 开始 | 结束 | 样式 | 文本）。
+ * 仿 Aegisub 桌面版字幕网格，横屏主导工作区。
+ *
+ * @author 伤感咩吖
+ */
+@Composable
+private fun SubtitleGrid(
+    events: List<AssEvent>,
+    currentEventId: Long?,
+    selectedEventId: Long?,
+    onSelect: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier) {
+        // 表头
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("#", Modifier.weight(0.05f), style = MaterialTheme.typography.labelMedium)
+            Text("开始", Modifier.weight(0.19f), style = MaterialTheme.typography.labelMedium)
+            Text("结束", Modifier.weight(0.19f), style = MaterialTheme.typography.labelMedium)
+            Text("样式", Modifier.weight(0.14f), style = MaterialTheme.typography.labelMedium)
+            Text("文本", Modifier.weight(0.43f), style = MaterialTheme.typography.labelMedium)
+        }
+        HorizontalDivider()
+        LazyColumn(Modifier.fillMaxSize()) {
+            itemsIndexed(events, key = { _, e -> e.id }) { index, event ->
+                SubtitleGridRow(
+                    event = event,
+                    index = index,
+                    isCurrent = event.id == currentEventId,
+                    isSelected = event.id == selectedEventId,
+                    onClick = { onSelect(event.id) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubtitleGridRow(
+    event: AssEvent,
+    index: Int,
+    isCurrent: Boolean,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    val bg = when {
+        isSelected -> MaterialTheme.colorScheme.primaryContainer
+        isCurrent -> MaterialTheme.colorScheme.secondaryContainer
+        else -> Color.Transparent
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("${index + 1}", Modifier.weight(0.05f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+        Text(event.start.toAssString(false), Modifier.weight(0.19f), style = MaterialTheme.typography.bodySmall)
+        Text(event.end.toAssString(false), Modifier.weight(0.19f), style = MaterialTheme.typography.bodySmall)
+        Text(
+            event.style,
+            Modifier.weight(0.14f),
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            event.strippedText.ifBlank { "（空）" },
+            Modifier.weight(0.43f),
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            color = if (event.comment) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
         )
     }
 }
