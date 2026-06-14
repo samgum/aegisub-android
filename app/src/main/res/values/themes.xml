@@ -1,3 +1,5 @@
 <resources>
-    <style name="Theme.AegisubAndroid" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- AppCompat 兼容主题（MainActivity 继承 AppCompatActivity 需 AppCompat 主题）。
+         DayNight 支持系统日/夜模式；UI 全权由 Compose AegisubTheme 绘制，此主题仅影响窗口底色/状态栏。 -->
+    <style name="Theme.AegisubAndroid" parent="Theme.AppCompat.DayNight.NoActionBar" />
 </resources>
