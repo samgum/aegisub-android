@@ -1,28 +1,48 @@
 package io.github.samgum.aegisub
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.samgum.aegisub.navigation.AppNavigation
 
 /**
- * 应用入口。Hilt 注入 + Compose 启动到导航图（主题在 AppNavigation 内按用户偏好套用）。
+ * 应用主入口（支持系统文件管理器直接打开 `.ass / .ssa / .srt / .vtt / .ttml / .lrc / .sub` 文件）。
  *
  * 继承 [AppCompatActivity] 以使 [androidx.appcompat.app.AppCompatDelegate.setApplicationLocales]
- * 在全 API（含 minSdk 26）生效——ComponentActivity 不会挂载 AppCompatDelegate，导致 per-app
- * 语言切换在 Android 13 以下不生效。
+ * 在全 API（含 minSdk 26）生效。
  *
  * @author 伤感咩吖
  */
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
+
+    private var incomingSubtitleUri by mutableStateOf<Uri?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null && intent?.action == Intent.ACTION_VIEW) {
+            incomingSubtitleUri = intent.data
+        }
         setContent {
-            AppNavigation()
+            AppNavigation(
+                externalSubtitleUri = incomingSubtitleUri,
+                onExternalUriConsumed = { incomingSubtitleUri = null },
+            )
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == Intent.ACTION_VIEW && intent.data != null) {
+            incomingSubtitleUri = intent.data
         }
     }
 }

@@ -1,5 +1,6 @@
 package io.github.samgum.aegisub.navigation
 
+import android.net.Uri
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -7,38 +8,45 @@ import androidx.compose.runtime.getValue
 import androidx.core.os.LocaleListCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import io.github.samgum.aegisub.feature.editor.navigation.editorRoute
-import io.github.samgum.aegisub.feature.editor.navigation.editorScreen
+import androidx.navigation.navArgument
 import io.github.samgum.aegisub.feature.editor.navigation.styleEditorScreen
 import io.github.samgum.aegisub.feature.editor.navigation.stylesRoute
-import io.github.samgum.aegisub.feature.preview.navigation.previewRoute
-import io.github.samgum.aegisub.feature.preview.navigation.previewScreen
 import io.github.samgum.aegisub.ui.about.AboutScreen
 import io.github.samgum.aegisub.ui.home.HomeScreen
 import io.github.samgum.aegisub.ui.settings.SettingsScreen
 import io.github.samgum.aegisub.ui.settings.SettingsViewModel
 import io.github.samgum.aegisub.ui.theme.AegisubTheme
+import io.github.samgum.aegisub.ui.workspace.WorkspaceScreen
 
-/** 主屏路由常量。 */
 private const val HOME_ROUTE = "home"
 private const val SETTINGS_ROUTE = "settings"
 private const val ABOUT_ROUTE = "about"
+private const val WORKSPACE_ROUTE_PATTERN = "workspace/{projectId}"
+private fun workspaceRoute(projectId: Long) = "workspace/$projectId"
 
 /**
- * 应用导航图：home（项目列表）↔ settings（设置）↔ about（关于）↔ editor（字幕编辑器）↔ preview（视频预览）。
- * 最外层按用户主题偏好套 [AegisubTheme]；语言偏好经 AppCompatDelegate 应用 per-app locale。
+ * 统一自适应工作台导航图：
+ * - `home`（Studio 工程仪表盘）
+ * - `workspace/{projectId}`（全功能自适应字幕工作台：手机/平板/折叠屏一键直达，彻底取代旧版割裂双屏）
+ * - `styles/{projectId}`（双栏全局样式库 + 当前脚本样式管理器）
+ * - `settings`（全局偏好与热键绑定）
+ * - `about`（关于 Aegisub SGMY Android）
  *
  * @author 伤感咩吖
  */
 @Composable
-fun AppNavigation() {
+fun AppNavigation(
+    externalSubtitleUri: Uri? = null,
+    onExternalUriConsumed: () -> Unit = {},
+) {
     val settings: SettingsViewModel = hiltViewModel()
     val themeMode by settings.themeMode.collectAsStateWithLifecycle()
     val langCode by settings.langCode.collectAsStateWithLifecycle()
-    // 冷启动时把持久化的语言偏好同步到 per-app locale
+
     LaunchedEffect(langCode) {
         AppCompatDelegate.setApplicationLocales(
             when (langCode) {
@@ -48,31 +56,44 @@ fun AppNavigation() {
             },
         )
     }
+
     AegisubTheme(themeMode) {
         val nav = rememberNavController()
         NavHost(navController = nav, startDestination = HOME_ROUTE) {
             composable(HOME_ROUTE) {
                 HomeScreen(
-                    onOpenProject = { id -> nav.navigate(editorRoute(id)) },
+                    externalSubtitleUri = externalSubtitleUri,
+                    onExternalUriConsumed = onExternalUriConsumed,
+                    onOpenProject = { id -> nav.navigate(workspaceRoute(id)) },
                     onOpenSettings = { nav.navigate(SETTINGS_ROUTE) },
+                    onOpenAbout = { nav.navigate(ABOUT_ROUTE) },
                 )
             }
+
+            composable(
+                route = WORKSPACE_ROUTE_PATTERN,
+                arguments = listOf(navArgument("projectId") { type = NavType.StringType }),
+            ) {
+                WorkspaceScreen(
+                    onBack = { nav.popBackStack() },
+                    onOpenStyles = { id -> nav.navigate(stylesRoute(id)) },
+                    onOpenSettings = { nav.navigate(SETTINGS_ROUTE) },
+                    onOpenAbout = { nav.navigate(ABOUT_ROUTE) },
+                )
+            }
+
+            styleEditorScreen(onBack = { nav.popBackStack() })
+
             composable(SETTINGS_ROUTE) {
                 SettingsScreen(
                     onBack = { nav.popBackStack() },
                     onOpenAbout = { nav.navigate(ABOUT_ROUTE) },
                 )
             }
+
             composable(ABOUT_ROUTE) {
                 AboutScreen(onBack = { nav.popBackStack() })
             }
-            editorScreen(
-                onBack = { nav.popBackStack() },
-                onOpenPreview = { id -> nav.navigate(previewRoute(id)) },
-                onOpenStyles = { id -> nav.navigate(stylesRoute(id)) },
-            )
-            styleEditorScreen(onBack = { nav.popBackStack() })
-            previewScreen(onBack = { nav.popBackStack() })
         }
     }
 }

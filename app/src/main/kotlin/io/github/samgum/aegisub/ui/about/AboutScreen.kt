@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import io.github.samgum.aegisub.R
 
 /**
- * 关于页：应用名 / 标语 / 作者 / 许可证 / 版本 / 参考声明 / GitHub 仓库链接。
+ * 关于页：应用信息、作者声明、许可证以及 Android / 桌面 SGMY 双仓库链接。
  *
  * @author 伤感咩吖
  */
@@ -42,9 +42,11 @@ fun AboutScreen(onBack: () -> Unit) {
     val version = remember {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0)?.versionName
-        }.getOrNull() ?: "—"
+        }.getOrNull() ?: "2.0.0-sgmy"
     }
     val githubUrl = stringResource(R.string.about_github_url)
+    val desktopUrl = "https://github.com/samgum/Aegisub"
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -99,9 +101,16 @@ fun AboutScreen(onBack: () -> Unit) {
                 supportingContent = { Text(githubUrl, style = MaterialTheme.typography.bodySmall) },
                 trailingContent = {
                     TextButton(onClick = {
-                        runCatching {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(githubUrl)))
-                        }
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(githubUrl))) }
+                    }) { Text(stringResource(R.string.about_open_browser)) }
+                },
+            )
+            ListItem(
+                headlineContent = { Text("Aegisub SGMY Desktop") },
+                supportingContent = { Text(desktopUrl, style = MaterialTheme.typography.bodySmall) },
+                trailingContent = {
+                    TextButton(onClick = {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(desktopUrl))) }
                     }) { Text(stringResource(R.string.about_open_browser)) }
                 },
             )

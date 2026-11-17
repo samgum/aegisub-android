@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- SGMY AI 字幕分析联网权限 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:name=".AegisubApplication"
         android:allowBackup="true"
@@ -8,15 +11,35 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:resizeableActivity="true"
         android:theme="@style/Theme.AegisubAndroid">
+
+        <!-- 允许在折叠屏、平板、分屏、自由窗口与 DeX 任意宽高比原生自适应 -->
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_MIN_ASPECT_RATIO_OVERRIDE"
+            android:value="false" />
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.AegisubAndroid">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- 支持从系统文件管理器/分享打开外部字幕与歌词文件 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:mimeType="text/*" />
+                <data android:mimeType="application/x-subrip" />
+                <data android:mimeType="application/ttml+xml" />
+                <data android:mimeType="application/xml" />
+                <data android:mimeType="application/octet-stream" />
             </intent-filter>
         </activity>
     </application>
