@@ -2,7 +2,7 @@
 
 > Author / Maintainer: 伤感咩吖 (`samgum`)
 
-## Current Status: ✅ v2.0.0-sgmy Full Desktop Aegisub + SGMY Parity
+## Current Status: ✅ v1.0.0 Full Desktop Aegisub + SGMY Parity
 
 `aegisub-android` replicates **both the complete upstream desktop Aegisub feature set and all custom features of [samgum/Aegisub (Aegisub SGMY)](https://github.com/samgum/Aegisub)**, paired with native adaptive layouts for **Phones, Tablets / DeX, Foldables (Tabletop & Book)**, and full **Keyboard + Mouse/Trackpad** support.
 

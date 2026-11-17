@@ -23,11 +23,11 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Run unit tests & build Debug APK
-        run: ./gradlew test assembleDebug --stacktrace
+      - name: Run unit tests, Lint & build Release APK
+        run: ./gradlew test lintDebug assembleRelease --stacktrace
 
-      - name: Upload Debug APK
+      - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: aegisub-sgmy-android-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: aegisub-android-release-apk
+          path: app/build/outputs/apk/release/app-release.apk

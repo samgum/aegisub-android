@@ -3,14 +3,14 @@
 **English** | [简体中文](README_CN.md)
 
 [![CI](https://github.com/samgum/aegisub-android/actions/workflows/android-ci.yml/badge.svg)](https://github.com/samgum/aegisub-android/actions/workflows/android-ci.yml)
-[![Version](https://img.shields.io/badge/version-2.0.0--sgmy-2563EB)]()
+[![Release](https://img.shields.io/badge/release-v1.0.0-2563EB)](https://github.com/samgum/aegisub-android/releases/latest)
 [![License](https://img.shields.io/badge/license-BSD%203--Clause-16A34A)](LICENCE)
 [![Platform](https://img.shields.io/badge/platform-Android%208.0%2B-3DDC84)]()
 [![Adaptive](https://img.shields.io/badge/adaptive-Phone%20%7C%20Tablet%20%7C%20Foldable%20%7C%20DeX-8B5CF6)]()
 
 A full-featured Android subtitle & karaoke studio replicating **both complete upstream desktop Aegisub and all custom features of [samgum/Aegisub (Aegisub SGMY)](https://github.com/samgum/Aegisub)** — engineered with a clean Material 3 UI across **phones, tablets, desktop mode (Samsung DeX), foldables (Tabletop & Book postures), and physical keyboard + mouse/trackpad**.
 
-**Author / Maintainer**: 伤感咩吖 (`samgum`)
+**Author / Maintainer**: 伤感咩吖 (`samgum`) · **Download APK**: **[GitHub Releases](https://github.com/samgum/aegisub-android/releases/latest)**
 
 ---
 
@@ -101,8 +101,8 @@ Detailed parity matrix: [docs/COMPARISON.md](docs/COMPARISON.md) · Engineering 
 
 ### Commands
 ```bash
-# Run all unit tests, Android Lint checks, and assemble Debug APK
-./gradlew test lintDebug assembleDebug
+# Run all unit tests, Android Lint checks, and assemble Release APK
+./gradlew test lintDebug assembleRelease
 ```
 
 ---

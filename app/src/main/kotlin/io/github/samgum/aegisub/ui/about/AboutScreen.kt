@@ -42,7 +42,7 @@ fun AboutScreen(onBack: () -> Unit) {
     val version = remember {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0)?.versionName
-        }.getOrNull() ?: "2.0.0-sgmy"
+        }.getOrNull() ?: "1.0.0"
     }
     val githubUrl = stringResource(R.string.about_github_url)
     val desktopUrl = "https://github.com/samgum/Aegisub"

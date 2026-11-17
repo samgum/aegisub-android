@@ -1,6 +1,6 @@
 # Upstream Desktop Aegisub & `samgum/Aegisub` (SGMY) ↔ `aegisub-android` Feature Parity Matrix
 
-> Updated for **v2.0.0-sgmy** · Author / Maintainer: 伤感咩吖 (`samgum`)
+> Updated for **v1.0.0** · Author / Maintainer: 伤感咩吖 (`samgum`)
 
 This matrix documents parity between **upstream desktop Aegisub**, **[samgum/Aegisub (Aegisub SGMY)](https://github.com/samgum/Aegisub)**, and **Aegisub Android**.
 

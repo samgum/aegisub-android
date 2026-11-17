@@ -14,8 +14,32 @@ android {
         applicationId = "io.github.samgum.aegisub"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "2.0.0-sgmy"
+        versionCode = 100
+        versionName = "1.0.0"
+    }
+
+    signingConfigs {
+        val keystorePath = System.getenv("RELEASE_STORE_FILE")
+        if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD").orEmpty()
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS").orEmpty()
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD").orEmpty()
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+        }
     }
 
     buildFeatures {

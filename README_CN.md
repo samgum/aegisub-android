@@ -3,14 +3,14 @@
 [English](README.md) | **简体中文**
 
 [![CI](https://github.com/samgum/aegisub-android/actions/workflows/android-ci.yml/badge.svg)](https://github.com/samgum/aegisub-android/actions/workflows/android-ci.yml)
-[![Version](https://img.shields.io/badge/version-2.0.0--sgmy-2563EB)]()
+[![Release](https://img.shields.io/badge/release-v1.0.0-2563EB)](https://github.com/samgum/aegisub-android/releases/latest)
 [![License](https://img.shields.io/badge/license-BSD%203--Clause-16A34A)](LICENCE)
 [![Platform](https://img.shields.io/badge/platform-Android%208.0%2B-3DDC84)]()
 [![Adaptive](https://img.shields.io/badge/adaptive-手机%20%7C%20平板%20%7C%20折叠屏%20%7C%20DeX-8B5CF6)]()
 
 面向 Android 平台深度重构的全功能专业字幕工作站——同时 **1:1 完整复刻上游桌面版 Aegisub 全部核心功能** 与 **[samgum/Aegisub (Aegisub SGMY)](https://github.com/samgum/Aegisub) 全部定制功能**，并全面适配 **手机（竖屏单手 / 横屏分栏）、平板 / Samsung DeX 桌面模式、折叠屏（悬停 Tabletop / 书本双页 Book）以及外接物理键盘 + 鼠标/触控板**。
 
-**作者 / 维护**：伤感咩吖 (`samgum`)
+**作者 / 维护**：伤感咩吖 (`samgum`) · **安装包下载**：**[GitHub Releases](https://github.com/samgum/aegisub-android/releases/latest)**
 
 ---
 
@@ -93,8 +93,8 @@ aegisub-android/
 
 ### 常用命令
 ```bash
-# 运行全部单元测试、Android Lint 静态检查并构建 Debug APK
-./gradlew test lintDebug assembleDebug
+# 运行全部单元测试、Android Lint 静态检查并构建 Release APK
+./gradlew test lintDebug assembleRelease
 ```
 
 ---
