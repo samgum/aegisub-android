@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardReturn
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -751,46 +752,211 @@ private fun QuickAssColorDialog(
     var r by remember { mutableIntStateOf(initial.r) }
     var g by remember { mutableIntStateOf(initial.g) }
     var b by remember { mutableIntStateOf(initial.b) }
+    var a by remember { mutableIntStateOf(initial.a) }
+
+    val initialHsv = remember(initial) { rgbToHsv(initial.r, initial.g, initial.b) }
+    var hue by remember { androidx.compose.runtime.mutableFloatStateOf(initialHsv[0]) }
+    var sat by remember { androidx.compose.runtime.mutableFloatStateOf(initialHsv[1]) }
+    var value by remember { androidx.compose.runtime.mutableFloatStateOf(initialHsv[2]) }
+
+    var htmlHex by remember { mutableStateOf("#%02X%02X%02X".format(initial.r, initial.g, initial.b)) }
+    var assHex by remember { mutableStateOf(initial.toBgrTagString()) }
+
+    fun syncFromRgb(nr: Int, ng: Int, nb: Int) {
+        r = nr.coerceIn(0, 255)
+        g = ng.coerceIn(0, 255)
+        b = nb.coerceIn(0, 255)
+        val hsv = rgbToHsv(r, g, b)
+        hue = hsv[0]
+        sat = hsv[1]
+        value = hsv[2]
+        htmlHex = "#%02X%02X%02X".format(r, g, b)
+        assHex = AssColor(r, g, b, a).toBgrTagString()
+    }
+
+    fun syncFromHsv(nh: Float, ns: Float, nv: Float) {
+        hue = nh.coerceIn(0f, 360f)
+        sat = ns.coerceIn(0f, 1f)
+        value = nv.coerceIn(0f, 1f)
+        val (nr, ng, nb) = hsvToRgb(hue, sat, value)
+        r = nr; g = ng; b = nb
+        htmlHex = "#%02X%02X%02X".format(r, g, b)
+        assHex = AssColor(r, g, b, a).toBgrTagString()
+    }
+
     val slotName = when (slot) {
         1 -> "主填充色 (\\1c)"
         2 -> "次填充色 (\\2c)"
         3 -> "描边色 (\\3c)"
         else -> "阴影色 (\\4c)"
     }
+
+    val swatches = remember {
+        listOf(
+            AssColor(255, 255, 255),
+            AssColor(255, 235, 59),
+            AssColor(56, 189, 248),
+            AssColor(34, 211, 238),
+            AssColor(251, 146, 60),
+            AssColor(239, 68, 68),
+            AssColor(244, 114, 182),
+            AssColor(74, 222, 128),
+            AssColor(148, 163, 184),
+            AssColor(0, 0, 0),
+        )
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("选择$slotName") },
+        title = { Text("调色板 · $slotName") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .height(36.dp)
+                        .height(40.dp)
                         .clip(MaterialTheme.shapes.small)
-                        .background(Color(r / 255f, g / 255f, b / 255f, 1f)),
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("R", Modifier.width(20.dp))
-                    Slider(value = r.toFloat(), onValueChange = { r = it.toInt() }, valueRange = 0f..255f, modifier = Modifier.weight(1f))
-                    Text("$r", Modifier.width(32.dp))
+                        .background(Color(0xFF1E293B))
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.small),
+                ) {
+                    Box(
+                        Modifier
+                            .matchParentSize()
+                            .background(Color(r / 255f, g / 255f, b / 255f, a / 255f)),
+                    )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("G", Modifier.width(20.dp))
-                    Slider(value = g.toFloat(), onValueChange = { g = it.toInt() }, valueRange = 0f..255f, modifier = Modifier.weight(1f))
-                    Text("$g", Modifier.width(32.dp))
+
+                // 常用色板一键点选
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    swatches.forEach { sw ->
+                        Box(
+                            Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(Color(sw.r / 255f, sw.g / 255f, sw.b / 255f, 1f))
+                                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                .pointerHoverIcon(PointerIcon.Hand)
+                                .clickable { syncFromRgb(sw.r, sw.g, sw.b) },
+                        )
+                    }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("B", Modifier.width(20.dp))
-                    Slider(value = b.toFloat(), onValueChange = { b = it.toInt() }, valueRange = 0f..255f, modifier = Modifier.weight(1f))
-                    Text("$b", Modifier.width(32.dp))
+
+                // HTML #RRGGBB 与 ASS &HBBGGRR& 双向编辑框
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = htmlHex,
+                        onValueChange = { raw ->
+                            htmlHex = raw
+                            val clean = raw.trim().removePrefix("#")
+                            if (clean.length == 6) {
+                                val parsed = clean.toIntOrNull(16)
+                                if (parsed != null) {
+                                    syncFromRgb((parsed ushr 16) and 0xFF, (parsed ushr 8) and 0xFF, parsed and 0xFF)
+                                    htmlHex = raw
+                                }
+                            }
+                        },
+                        label = { Text("HTML #RRGGBB") },
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = assHex,
+                        onValueChange = { raw ->
+                            assHex = raw
+                            AssColor.parseAssOrNull(raw)?.let { c ->
+                                syncFromRgb(c.r, c.g, c.b)
+                                assHex = raw
+                            }
+                        },
+                        label = { Text("ASS &HBBGGRR&") },
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        modifier = Modifier.weight(1f),
+                    )
                 }
+
+                // HSV 滑杆
+                ColorChannelSlider("H", hue, 0f..360f, "${hue.toInt()}°") { syncFromHsv(it, sat, value) }
+                ColorChannelSlider("S", sat * 100f, 0f..100f, "${(sat * 100).toInt()}%") { syncFromHsv(hue, it / 100f, value) }
+                ColorChannelSlider("V", value * 100f, 0f..100f, "${(value * 100).toInt()}%") { syncFromHsv(hue, sat, it / 100f) }
+
+                HorizontalDivider()
+
+                // RGB + Alpha 滑杆
+                ColorChannelSlider("R", r.toFloat(), 0f..255f, "$r") { syncFromRgb(it.toInt(), g, b) }
+                ColorChannelSlider("G", g.toFloat(), 0f..255f, "$g") { syncFromRgb(r, it.toInt(), b) }
+                ColorChannelSlider("B", b.toFloat(), 0f..255f, "$b") { syncFromRgb(r, g, it.toInt()) }
+                ColorChannelSlider("不透明度", a.toFloat(), 0f..255f, "$a") { a = it.toInt().coerceIn(0, 255) }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onApply(AssColor(r, g, b, 255)) }) { Text("应用") }
+            Button(onClick = { onApply(AssColor(r, g, b, a)) }) { Text("应用颜色") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消") }
         },
+    )
+}
+
+@Composable
+private fun ColorChannelSlider(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    valueLabel: String,
+    onChange: (Float) -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(48.dp))
+        Slider(value = value, onValueChange = onChange, valueRange = range, modifier = Modifier.weight(1f).height(26.dp))
+        Text(
+            valueLabel,
+            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+            modifier = Modifier.width(40.dp),
+        )
+    }
+}
+
+private fun rgbToHsv(r: Int, g: Int, b: Int): FloatArray {
+    val rf = r / 255f
+    val gf = g / 255f
+    val bf = b / 255f
+    val maxC = maxOf(rf, gf, bf)
+    val minC = minOf(rf, gf, bf)
+    val delta = maxC - minC
+    val h = when {
+        delta == 0f -> 0f
+        maxC == rf -> 60f * (((gf - bf) / delta) % 6f)
+        maxC == gf -> 60f * (((bf - rf) / delta) + 2f)
+        else -> 60f * (((rf - gf) / delta) + 4f)
+    }.let { if (it < 0f) it + 360f else it }
+    val s = if (maxC == 0f) 0f else delta / maxC
+    return floatArrayOf(h, s, maxC)
+}
+
+private fun hsvToRgb(h: Float, s: Float, v: Float): Triple<Int, Int, Int> {
+    val c = v * s
+    val x = c * (1f - kotlin.math.abs(((h / 60f) % 2f) - 1f))
+    val m = v - c
+    val (r1, g1, b1) = when {
+        h < 60f -> Triple(c, x, 0f)
+        h < 120f -> Triple(x, c, 0f)
+        h < 180f -> Triple(0f, c, x)
+        h < 240f -> Triple(0f, x, c)
+        h < 300f -> Triple(x, 0f, c)
+        else -> Triple(c, 0f, x)
+    }
+    return Triple(
+        ((r1 + m) * 255f).toInt().coerceIn(0, 255),
+        ((g1 + m) * 255f).toInt().coerceIn(0, 255),
+        ((b1 + m) * 255f).toInt().coerceIn(0, 255),
     )
 }

@@ -360,7 +360,7 @@ private fun StyleLivePreviewBanner(style: AssStyle) {
                 )
             }
         }
-        val sample = "Aegisub SGMY 字幕样式预览 123"
+        val sample = "字幕样式效果预览 ABC 123"
         val previewSp = (style.fontSize.coerceIn(14.0, 56.0) * 0.42).sp
         val baseTs = TextStyle(
             fontSize = previewSp,
@@ -488,6 +488,7 @@ private fun ToggleChip(label: String, checked: Boolean, onChange: (Boolean) -> U
 @Composable
 private fun AssColorField(label: String, color: AssColor, onChange: (AssColor) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
+    var hexInput by remember(color) { mutableStateOf(color.toAssString()) }
     Column {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -502,7 +503,24 @@ private fun AssColorField(label: String, color: AssColor, onChange: (AssColor) -
             Icon(if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, contentDescription = null)
         }
         AnimatedVisibility(visible = expanded) {
-            Column(Modifier.padding(top = 4.dp)) {
+            Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                OutlinedTextField(
+                    value = hexInput,
+                    onValueChange = { raw ->
+                        hexInput = raw
+                        val trimmed = raw.trim()
+                        if (trimmed.startsWith("#") && trimmed.length == 7) {
+                            trimmed.substring(1).toIntOrNull(16)?.let { rgb ->
+                                onChange(AssColor((rgb ushr 16) and 0xFF, (rgb ushr 8) and 0xFF, rgb and 0xFF, color.a))
+                            }
+                        } else {
+                            AssColor.parseAssOrNull(trimmed)?.let(onChange)
+                        }
+                    },
+                    label = { Text("ASS &HAABBGGRR 或 HTML #RRGGBB") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 ColorChannelSlider("R", color.r) { v -> onChange(AssColor(v, color.g, color.b, color.a)) }
                 ColorChannelSlider("G", color.g) { v -> onChange(AssColor(color.r, v, color.b, color.a)) }
                 ColorChannelSlider("B", color.b) { v -> onChange(AssColor(color.r, color.g, v, color.a)) }

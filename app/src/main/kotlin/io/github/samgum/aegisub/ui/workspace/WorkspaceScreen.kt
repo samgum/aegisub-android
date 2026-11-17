@@ -76,7 +76,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.samgum.aegisub.data.hotkeys.rememberHotkeyController
 import io.github.samgum.aegisub.domain.edit.HotkeyAction
-import io.github.samgum.aegisub.domain.format.SubtitleFormat
 import io.github.samgum.aegisub.ui.adaptive.AdaptiveWindowState
 import io.github.samgum.aegisub.ui.adaptive.WorkspacePosture
 import io.github.samgum.aegisub.ui.adaptive.rememberAdaptiveWindowState
@@ -87,6 +86,7 @@ import io.github.samgum.aegisub.ui.workspace.components.CompactStudioTopBar
 import io.github.samgum.aegisub.ui.workspace.components.DesktopMenuAndToolbar
 import io.github.samgum.aegisub.ui.workspace.components.VideoStagePane
 import io.github.samgum.aegisub.ui.workspace.components.WorkspaceDialogType
+import io.github.samgum.aegisub.ui.workspace.dialogs.ExportDialogSelection
 import io.github.samgum.aegisub.ui.workspace.dialogs.WorkspaceDialogHost
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -111,6 +111,7 @@ fun WorkspaceScreen(
     val waveform by viewModel.waveform.collectAsStateWithLifecycle()
     val spectrogram by viewModel.spectrogram.collectAsStateWithLifecycle()
     val keyframesMs by viewModel.keyframesMs.collectAsStateWithLifecycle()
+    val timecodesMs by viewModel.timecodesMs.collectAsStateWithLifecycle()
     val activeSubtitles by viewModel.activeSubtitles.collectAsStateWithLifecycle()
     val visualToolMode by viewModel.visualToolMode.collectAsStateWithLifecycle()
     val displayPreset by viewModel.displayPreset.collectAsStateWithLifecycle()
@@ -126,7 +127,7 @@ fun WorkspaceScreen(
 
     var activeDialog by remember { mutableStateOf<WorkspaceDialogType?>(null) }
     var visualOverlayEnabled by remember { mutableStateOf(false) }
-    var pendingExportFormat by remember { mutableStateOf<SubtitleFormat?>(null) }
+    var pendingExportSelection by remember { mutableStateOf<ExportDialogSelection?>(null) }
     var isTextInputFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(statusBanner) {
@@ -165,16 +166,37 @@ fun WorkspaceScreen(
         }
     }
 
-    val exportSubtitleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
-        val fmt = pendingExportFormat
-        pendingExportFormat = null
-        if (uri != null && fmt != null) {
+    val importTimecodesLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
             scope.launch {
-                val out = viewModel.exportAs(fmt)
-                withContext(Dispatchers.IO) {
-                    context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(out) }
+                val content = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
                 }
-                viewModel.postBanner("已导出为 ${fmt.name.uppercase()} 格式")
+                if (content.isNotBlank()) viewModel.importTimecodesText(content)
+            }
+        }
+    }
+
+    val exportTimecodesLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) {
+            val content = viewModel.exportTimecodesText()
+            scope.launch(Dispatchers.IO) {
+                context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(content) }
+            }
+            viewModel.postBanner("VFR 时间码文件已导出")
+        }
+    }
+
+    val exportSubtitleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
+        val sel = pendingExportSelection
+        pendingExportSelection = null
+        if (uri != null && sel != null) {
+            scope.launch {
+                val bytes = viewModel.exportBytesWithPipeline(sel.format, sel.filters, sel.charset)
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                }
+                viewModel.postBanner("已导出为 ${sel.format.name.uppercase()} (${sel.charset.charsetName})")
             }
         }
     }
@@ -198,6 +220,14 @@ fun WorkspaceScreen(
                 state.script.events.firstOrNull { it.id == state.activeEventId } ?: state.script.events.firstOrNull()
             }
             val activeOverflow = activeEvent?.id?.let { state.overflowMap[it] }
+
+            fun cutLinesToClipboard() {
+                val txt = viewModel.cutSelectedLinesAsAss()
+                if (txt.isNotEmpty()) {
+                    clipboard.setText(AnnotatedString(txt))
+                    viewModel.postBanner("已剪切字幕行")
+                }
+            }
 
             fun copyLinesToClipboard() {
                 val txt = viewModel.copySelectedLinesAsAss()
@@ -223,7 +253,7 @@ fun WorkspaceScreen(
                     HotkeyAction.FIND_REPLACE -> activeDialog = WorkspaceDialogType.FIND_REPLACE
                     HotkeyAction.DUPLICATE_LINE -> viewModel.duplicateTargetLines()
                     HotkeyAction.DELETE_LINE -> viewModel.deleteTargetLines()
-                    HotkeyAction.SPLIT_LINE -> viewModel.splitActiveLine(atVideoTime = state.hasMedia)
+                    HotkeyAction.SPLIT_LINE -> viewModel.splitActiveLine(atVideoTime = state.hasMedia || state.playback.isDummyVideo)
                     HotkeyAction.JOIN_KEEP_FIRST -> viewModel.joinTargetLines(WorkspaceViewModel.JoinMode.KEEP_FIRST)
                     HotkeyAction.JOIN_CONCAT -> viewModel.joinTargetLines(WorkspaceViewModel.JoinMode.CONCAT)
                     HotkeyAction.JOIN_KARAOKE -> viewModel.joinTargetLines(WorkspaceViewModel.JoinMode.AS_KARAOKE)
@@ -265,6 +295,11 @@ fun WorkspaceScreen(
                     .onPreviewKeyEvent { keyEv ->
                         if (keyEv.type != KeyEventType.KeyDown || activeDialog != null) return@onPreviewKeyEvent false
 
+                        if (keyEv.isCtrlPressed && keyEv.key == Key.G) {
+                            activeDialog = WorkspaceDialogType.JUMP_TO
+                            return@onPreviewKeyEvent true
+                        }
+
                         // 当用户正在编辑框打字时，仅响应带 Ctrl / Alt 修饰键的全局热键，绝不吞噬普通字母、空格与方向键！
                         if (isTextInputFocused) {
                             if (!keyEv.isCtrlPressed && !keyEv.isAltPressed) return@onPreviewKeyEvent false
@@ -273,7 +308,7 @@ fun WorkspaceScreen(
                             return@onPreviewKeyEvent true
                         }
 
-                        // 焦点在网格/视频/波形区时：支持全部单键打轴快捷键 + 标准桌面方向键/Delete/Esc/Ctrl+C/V/A
+                        // 焦点在网格/视频/波形区时：支持全部单键打轴快捷键 + 标准桌面方向键/Delete/Esc/Ctrl+X/C/V/A
                         val matched = hotkeys.match(keyEv)
                         if (matched != null) {
                             dispatchHotkey(matched)
@@ -295,6 +330,9 @@ fun WorkspaceScreen(
                             }
                             keyEv.isCtrlPressed && keyEv.key == Key.A -> {
                                 viewModel.selectAll(); true
+                            }
+                            keyEv.isCtrlPressed && keyEv.key == Key.X -> {
+                                cutLinesToClipboard(); true
                             }
                             keyEv.isCtrlPressed && keyEv.key == Key.C -> {
                                 copyLinesToClipboard(); true
@@ -322,17 +360,20 @@ fun WorkspaceScreen(
                         onCloseVideo = viewModel::closeMedia,
                         onImportKeyframes = { importKeyframesLauncher.launch(arrayOf("text/*", "*/*")) },
                         onExportKeyframes = { exportKeyframesLauncher.launch("${state.projectName}.keyframes.txt") },
+                        onImportTimecodes = { importTimecodesLauncher.launch(arrayOf("text/*", "*/*")) },
+                        onExportTimecodes = { exportTimecodesLauncher.launch("${state.projectName}.timecodes.txt") },
                         onOpenStyleManager = { onOpenStyles(viewModel.projectId) },
                         onOpenSettings = onOpenSettings,
                         onOpenAbout = onOpenAbout,
                         onCycleTagMode = viewModel::cycleTagDisplayMode,
                         onSetDisplayPreset = viewModel::setDisplayPreset,
                         onOpenDialog = { activeDialog = it },
+                        onRunAutomation = viewModel::runAutomationMacro,
                         onQuickSnapshot = { viewModel.takeSnapshot("手动保存") },
                         onInsertBefore = { viewModel.insertLineBefore(false) },
                         onInsertAfter = { viewModel.insertLineAfter(false) },
                         onDuplicateLines = viewModel::duplicateTargetLines,
-                        onSplitLine = { viewModel.splitActiveLine(state.hasMedia) },
+                        onSplitLine = { viewModel.splitActiveLine(state.hasMedia || state.playback.isDummyVideo) },
                         onSplitByKaraoke = viewModel::splitActiveByKaraoke,
                         onJoinConcat = { viewModel.joinTargetLines(WorkspaceViewModel.JoinMode.CONCAT) },
                         onJoinKeepFirst = { viewModel.joinTargetLines(WorkspaceViewModel.JoinMode.KEEP_FIRST) },
@@ -340,6 +381,9 @@ fun WorkspaceScreen(
                         onRecombine = { viewModel.joinTargetLines(WorkspaceViewModel.JoinMode.RECOMBINE) },
                         onMakeContinuousEnd = { viewModel.makeTimesContinuous(changeEnd = true) },
                         onMakeContinuousStart = { viewModel.makeTimesContinuous(changeEnd = false) },
+                        onShiftSelectionToVideo = viewModel::shiftSelectionToVideoTime,
+                        onSnapToScene = viewModel::snapActiveToScene,
+                        onCutLines = ::cutLinesToClipboard,
                         onCopyLines = ::copyLinesToClipboard,
                         onPasteLines = ::pasteLinesFromClipboard,
                         onSelectAll = viewModel::selectAll,
@@ -395,6 +439,13 @@ fun WorkspaceScreen(
                             viewModel.clearEventPos()
                             viewModel.clearEventMove()
                             viewModel.clearEventClips()
+                        },
+                        onOpenDummyVideoDialog = { activeDialog = WorkspaceDialogType.DUMMY_VIDEO },
+                        onOpenJumpToDialog = { activeDialog = WorkspaceDialogType.JUMP_TO },
+                        onOpenVideoDetailsDialog = { activeDialog = WorkspaceDialogType.VIDEO_DETAILS },
+                        onCopyTextToClipboard = { txt ->
+                            clipboard.setText(AnnotatedString(txt))
+                            viewModel.postBanner("已复制 $txt")
                         },
                         showTypesettingStrip = showStrip,
                         compactControls = compact,
@@ -470,7 +521,7 @@ fun WorkspaceScreen(
                         onSelectRangeTo = viewModel::selectRangeTo,
                         onSelectAll = viewModel::selectAll,
                         onClearSelection = viewModel::clearSelection,
-                        onSort = viewModel::sortLines,
+                        onSort = { k, o -> viewModel.sortLines(k, o) },
                         onInsertBefore = viewModel::insertLineBefore,
                         onInsertAfter = viewModel::insertLineAfter,
                         onDuplicate = viewModel::duplicateTargetLines,
@@ -528,7 +579,7 @@ fun WorkspaceScreen(
                         )
 
                         WorkspacePosture.PHONE_COMPACT -> PhoneCompactStudioLayout(
-                            hasMedia = state.hasMedia,
+                            hasMedia = state.hasMedia || state.playback.isDummyVideo,
                             topBar = renderCompactTopBar,
                             videoStage = renderVideoStage,
                             audioDeck = renderAudioDeck,
@@ -547,14 +598,22 @@ fun WorkspaceScreen(
                     script = state.script,
                     activeEvent = activeEvent,
                     selectedIds = state.selectedIds,
+                    hasMedia = state.hasMedia,
+                    playback = state.playback,
+                    keyframesMs = keyframesMs,
+                    timecodesMs = timecodesMs,
                     settings = state.settings,
                     snapshots = snapshots,
                     bookmarks = bookmarks,
                     viewModel = viewModel,
                     onSwitchDialog = { activeDialog = it },
-                    onExportFormatPicked = { fmt ->
-                        pendingExportFormat = fmt
-                        val ext = (fmt.extensions.firstOrNull() ?: ".ass").trimStart('.')
+                    onImportKeyframes = { importKeyframesLauncher.launch(arrayOf("text/*", "*/*")) },
+                    onExportKeyframes = { exportKeyframesLauncher.launch("${state.projectName}.keyframes.txt") },
+                    onImportTimecodes = { importTimecodesLauncher.launch(arrayOf("text/*", "*/*")) },
+                    onExportTimecodes = { exportTimecodesLauncher.launch("${state.projectName}.timecodes.txt") },
+                    onExportConfigured = { cfg ->
+                        pendingExportSelection = cfg
+                        val ext = (cfg.format.extensions.firstOrNull() ?: ".ass").trimStart('.')
                         exportSubtitleLauncher.launch("${state.projectName}.$ext")
                     },
                 )

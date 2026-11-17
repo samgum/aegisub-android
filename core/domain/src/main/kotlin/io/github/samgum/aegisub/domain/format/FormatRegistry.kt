@@ -1,8 +1,8 @@
 package io.github.samgum.aegisub.domain.format
 
 /**
- * 自动检测注册表：扩展名 + 内容嗅探。
- * 支持 ASS / SSA / SRT / WebVTT / TTML(DFXP) / LRC(含增强型逐字LRC) / MicroDVD(.sub) / TXT。
+ * 字幕与歌词自动检测注册表（完整覆盖桌面 Aegisub + SGMY 全部 11 种格式）：
+ * ASS / SSA / SRT / WebVTT / TTML(DFXP) / LRC(含增强型逐字LRC) / TTXT(MPEG-4) / MicroDVD(.sub) / TranStation / Adobe Encore / TXT。
  *
  * @author 伤感咩吖
  */
@@ -13,8 +13,11 @@ object FormatRegistry {
         SrtFormat,
         VttFormat,
         TtmlFormat,
+        TtxtFormat,
         LrcFormat,
         MicroDvdFormat,
+        TranStationFormat,
+        EncoreFormat,
         TxtFormat,
     )
 

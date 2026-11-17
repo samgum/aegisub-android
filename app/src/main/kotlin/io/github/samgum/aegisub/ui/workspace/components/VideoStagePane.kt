@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.ZoomInMap
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,6 +51,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -67,6 +69,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
@@ -116,6 +119,10 @@ fun VideoStagePane(
     onClipRectChange: (Int, Int, Int, Int, Boolean) -> Unit,
     onVectorClipChange: (VisualTags.VectorClip) -> Unit,
     onClearVisualTags: () -> Unit,
+    onOpenDummyVideoDialog: () -> Unit = {},
+    onOpenJumpToDialog: () -> Unit = {},
+    onOpenVideoDetailsDialog: () -> Unit = {},
+    onCopyTextToClipboard: (String) -> Unit = {},
     showTypesettingStrip: Boolean = true,
     compactControls: Boolean = false,
     modifier: Modifier = Modifier,
@@ -127,11 +134,16 @@ fun VideoStagePane(
     var panOffset by remember { mutableStateOf(Offset.Zero) }
     var arOverride by remember { mutableFloatStateOf(0f) }
     var showSafeArea by remember { mutableStateOf(false) }
+    var videoContextMenuOpen by remember { mutableStateOf(false) }
+    var cursorScriptX by remember { mutableIntStateOf(playResX / 2) }
+    var cursorScriptY by remember { mutableIntStateOf(playResY / 2) }
     var inverseClipToggle by remember(activeEvent?.id) {
         mutableStateOf(
             activeEvent?.text?.let { VisualTags.getClip(it)?.inverse ?: VisualTags.getVectorClip(it)?.inverse } ?: false,
         )
     }
+
+    val playableStage = hasMedia || playback.isDummyVideo
 
     val effectiveAspect = when {
         arOverride > 0f -> arOverride
@@ -217,10 +229,10 @@ fun VideoStagePane(
                             }
                         }
                     }
-                    .pointerInput(visualOverlayEnabled, hasMedia) {
+                    .pointerInput(visualOverlayEnabled, playableStage) {
                         if (!visualOverlayEnabled) {
                             detectTapGestures(
-                                onTap = { if (hasMedia) onPlayPause() },
+                                onTap = { if (playableStage) onPlayPause() },
                                 onDoubleTap = { zoomScale = 1f; panOffset = Offset.Zero },
                             )
                         }
@@ -255,12 +267,31 @@ fun VideoStagePane(
                             translationX = panOffset.x
                             translationY = panOffset.y
                         }
+                        .pointerInput(playResX, playResY) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val ev = awaitPointerEvent(PointerEventPass.Initial)
+                                    val pt = ev.changes.firstOrNull()?.position
+                                    if (pt != null && size.width > 0 && size.height > 0) {
+                                        cursorScriptX = ((pt.x / size.width) * playResX).roundToInt().coerceIn(0, playResX)
+                                        cursorScriptY = ((pt.y / size.height) * playResY).roundToInt().coerceIn(0, playResY)
+                                    }
+                                    if (ev.type == PointerEventType.Press && ev.buttons.isSecondaryPressed) {
+                                        videoContextMenuOpen = true
+                                        ev.changes.forEach { it.consume() }
+                                    }
+                                }
+                            }
+                        }
                         .background(Color(0xFF141820)),
                 ) {
                     if (hasMedia) {
                         PlayerSurface(player = player, modifier = Modifier.fillMaxSize())
                     } else {
-                        DummyVideoBackdrop()
+                        DummyVideoBackdrop(
+                            checkerboard = playback.dummyCheckerboard,
+                            solidColorArgb = playback.dummyColorArgb,
+                        )
                     }
 
                     SubtitleOverlay(
@@ -299,10 +330,62 @@ fun VideoStagePane(
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
+
+                    // 视频视口鼠标右键菜单（对标桌面 Aegisub video_context）
+                    DropdownMenu(
+                        expanded = videoContextMenuOpen,
+                        onDismissRequest = { videoContextMenuOpen = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("复制此处坐标 \\pos($cursorScriptX,$cursorScriptY)") },
+                            onClick = {
+                                videoContextMenuOpen = false
+                                onCopyTextToClipboard("\\pos($cursorScriptX,$cursorScriptY)")
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("将当前句移至 ($cursorScriptX, $cursorScriptY)") },
+                            enabled = activeEvent != null,
+                            onClick = {
+                                videoContextMenuOpen = false
+                                onPosChange(cursorScriptX, cursorScriptY)
+                            },
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("画面缩放 50%") },
+                            onClick = { videoContextMenuOpen = false; zoomScale = 0.5f; panOffset = Offset.Zero },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("画面缩放 100%") },
+                            onClick = { videoContextMenuOpen = false; zoomScale = 1.0f; panOffset = Offset.Zero },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("画面缩放 200%") },
+                            onClick = { videoContextMenuOpen = false; zoomScale = 2.0f },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (showSafeArea) "隐藏安全框参考线" else "显示安全框参考线") },
+                            onClick = { videoContextMenuOpen = false; showSafeArea = !showSafeArea },
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("跳转到时间或帧号…") },
+                            onClick = { videoContextMenuOpen = false; onOpenJumpToDialog() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("虚拟视频画布设置…") },
+                            onClick = { videoContextMenuOpen = false; onOpenDummyVideoDialog() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("视频与时间码详情…") },
+                            onClick = { videoContextMenuOpen = false; onOpenVideoDetailsDialog() },
+                        )
+                    }
                 }
 
-                // 未加载媒体时，仅在未进入排版且无台词遮挡时居中显示清爽的打开按钮
-                if (!hasMedia && !visualOverlayEnabled && renderInfos.isEmpty()) {
+                // 未加载媒体且未启用虚拟视频时，仅在未进入排版且无台词遮挡时居中显示清爽的打开按钮
+                if (!playableStage && !visualOverlayEnabled && renderInfos.isEmpty()) {
                     Surface(
                         color = Color(0xCC1E293B),
                         shape = MaterialTheme.shapes.medium,
@@ -375,7 +458,7 @@ fun VideoStagePane(
             }
         }
 
-        if (hasMedia || !compactControls) {
+        if (playableStage || !compactControls) {
             VideoTransportBar(
                 playback = playback,
                 compact = compactControls,
@@ -388,6 +471,7 @@ fun VideoStagePane(
                 onFrameBack = onFrameBack,
                 onFrameForward = onFrameForward,
                 onSpeedChange = onSpeedChange,
+                onOpenJumpToDialog = onOpenJumpToDialog,
             )
         }
     }
@@ -420,18 +504,32 @@ private fun VisualStripIcon(
 }
 
 @Composable
-private fun DummyVideoBackdrop() {
+private fun DummyVideoBackdrop(
+    checkerboard: Boolean = true,
+    solidColorArgb: Int = 0xFF181E29.toInt(),
+) {
+    val base = Color(solidColorArgb or (0xFF shl 24))
+    val alt = Color(
+        red = (base.red * 0.80f).coerceIn(0f, 1f),
+        green = (base.green * 0.80f).coerceIn(0f, 1f),
+        blue = (base.blue * 0.80f).coerceIn(0f, 1f),
+        alpha = 1f,
+    )
     Canvas(Modifier.fillMaxSize()) {
-        val cell = (size.minDimension / 14f).coerceAtLeast(12f)
-        val cols = (size.width / cell).toInt() + 1
-        val rows = (size.height / cell).toInt() + 1
-        for (r in 0 until rows) {
-            for (c in 0 until cols) {
-                drawRect(
-                    color = if ((r + c) % 2 == 0) Color(0xFF181E29) else Color(0xFF131822),
-                    topLeft = Offset(c * cell, r * cell),
-                    size = Size(cell, cell),
-                )
+        if (!checkerboard) {
+            drawRect(color = base, size = size)
+        } else {
+            val cell = (size.minDimension / 14f).coerceAtLeast(12f)
+            val cols = (size.width / cell).toInt() + 1
+            val rows = (size.height / cell).toInt() + 1
+            for (r in 0 until rows) {
+                for (c in 0 until cols) {
+                    drawRect(
+                        color = if ((r + c) % 2 == 0) base else alt,
+                        topLeft = Offset(c * cell, r * cell),
+                        size = Size(cell, cell),
+                    )
+                }
             }
         }
     }
@@ -469,6 +567,7 @@ private fun VideoTransportBar(
     onFrameBack: () -> Unit,
     onFrameForward: () -> Unit,
     onSpeedChange: (Float) -> Unit,
+    onOpenJumpToDialog: () -> Unit = {},
 ) {
     val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f, 4.0f)
     var speedMenu by remember { mutableStateOf(false) }
@@ -511,7 +610,10 @@ private fun VideoTransportBar(
                 Text(
                     text = "${SubTimeFmt.ass(playback.positionMs)} / ${SubTimeFmt.ass(playback.durationMs)}",
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
-                    modifier = Modifier.padding(horizontal = 4.dp),
+                    modifier = Modifier
+                        .pointerHoverIcon(PointerIcon.Hand)
+                        .clickable(onClick = onOpenJumpToDialog)
+                        .padding(horizontal = 4.dp),
                 )
 
                 if (!compact) {
@@ -519,7 +621,10 @@ private fun VideoTransportBar(
                         text = "帧 $frameNumber",
                         style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(end = 4.dp),
+                        modifier = Modifier
+                            .pointerHoverIcon(PointerIcon.Hand)
+                            .clickable(onClick = onOpenJumpToDialog)
+                            .padding(end = 4.dp),
                     )
                 }
 

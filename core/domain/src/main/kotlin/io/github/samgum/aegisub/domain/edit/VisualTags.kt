@@ -278,7 +278,16 @@ object VisualTags {
         val re = if (cSlot == 1) Regex("""\\1?c&?[Hh]?[0-9A-Fa-f]+&?""")
         else Regex("""\\${cSlot}c&?[Hh]?[0-9A-Fa-f]+&?""")
         val tag = "\\${cSlot}c${color.toBgrTagString()}"
-        return if (re.containsMatchIn(text)) text.replace(re) { tag } else insertTag(text, tag)
+        var updated = if (re.containsMatchIn(text)) text.replace(re) { tag } else insertTag(text, tag)
+
+        val alphaRe = Regex("""\\${cSlot}a&?[Hh]?[0-9A-Fa-f]+&?""")
+        if (color.a < 255) {
+            val aTag = "\\${cSlot}a${color.toAlphaTagString()}"
+            updated = if (alphaRe.containsMatchIn(updated)) updated.replace(alphaRe) { aTag } else insertTag(updated, aTag)
+        } else if (alphaRe.containsMatchIn(updated)) {
+            updated = cleanEmptyBraces(updated.replace(alphaRe) { "" })
+        }
+        return updated
     }
 
     fun setBlur(text: String, strength: Double): String {

@@ -1,49 +1,40 @@
-# Roadmap — Aegisub SGMY Android
+# Roadmap — Aegisub Android
 
 > Author / Maintainer: 伤感咩吖 (`samgum`)
 
-## Current Status: ✅ v2.0.0-sgmy Complete Studio Overhaul
+## Current Status: ✅ v2.0.0-sgmy Full Desktop Aegisub + SGMY Parity
 
-`aegisub-android` has completed its full architectural & UI overhaul to **1:1 replicate [samgum/Aegisub (Aegisub SGMY)](https://github.com/samgum/Aegisub)** while delivering native adaptive postures for **Phones, Tablets / DeX, and Foldables (Tabletop & Book)**.
+`aegisub-android` replicates **both the complete upstream desktop Aegisub feature set and all custom features of [samgum/Aegisub (Aegisub SGMY)](https://github.com/samgum/Aegisub)**, paired with native adaptive layouts for **Phones, Tablets / DeX, Foldables (Tabletop & Book)**, and full **Keyboard + Mouse/Trackpad** support.
 
 ---
 
 ## Completed Milestones
 
-### Milestone 1 · Core Domain & Format Engine (`:core:domain`) ✅
-- [x] Microsecond-precision `SubTime` + immutable `AssScript / AssEvent / AssStyle / AssInfo / AssColor`
-- [x] Bidirectional **8-format engine**: ASS, SSA, SRT, WebVTT, **TTML/DFXP** (`<span>` word karaoke + `ttm:role="x-bg"` harmony), **Enhanced LRC** (`[offset:]`, `<mm:ss.xx>` syllable karaoke, Apple Music trailing end timestamps), **MicroDVD (`.sub`)**, and TXT
-- [x] **SGMY Exclusive Domain Suite**:
-  - [x] `FixCommonErrors` (short/long durations, overlap trimming, short gaps, trailing `U+3000` whitespace, ASS whitespace-only empty line removal with independent staged snapshots)
-  - [x] `LyricScrollGenerator` (Single/Bilingual pairing, 7 resolution presets incl. vertical `1080×1920`, cubic ease-out `\move` + `\t` animation, `ScrollCurrent`/`ScrollDim`)
-  - [x] `ChineseConverter` (ICU + phrase dictionary), `SubtitleTextCleaner`, `PairedPunctuationChecker`, `FuriganaAnnotator` (`{*sgmy-furigana}` idempotent ruby annotations)
-  - [x] `StitchTimings` & `StyleOverlapChecker`
-  - [x] `SubtitleOverflowDetector` (PlayRes width & CPS bounds check)
-- [x] **Desktop Aegisub Engineering Tools**: `VisualTags` (pos, move, frx/fry/frz, org, fscx/fscy, fad/fade, rect & vector clip/iclip), `SelectLines`, `KanjiTimer`, `KeyframesIo` (`# keyframe format v1`), `FontsCollectorAnalyzer`, `ResolutionResampler`, `FramerateConverter`, `TimePostProcess`, `ActiveSubtitleResolver` (real-time `\move` / `\fad` / `\t` / `\kf` interpolation)
+### Milestone 1 · Core Domain, 11 Formats, Attachments & SGMY Suite (`:core:domain`) ✅
+- [x] Microsecond-precision `SubTime` + immutable `AssScript / AssEvent / AssStyle / AssInfo / AssColor / AssAttachment`
+- [x] Byte-accurate `[Fonts]` & `[Graphics]` UUEncode codec (`AssUuCodec`, ported from `libaegisub/ass/uuencode.cpp`)
+- [x] Bidirectional **11-format engine**: ASS, SSA, SRT, WebVTT, TTML/DFXP, Enhanced LRC, MPEG-4 TTXT (`.ttxt`), MicroDVD (`.sub`), TranStation, Adobe Encore, and Plain Text (with 17 ported upstream `lyric_readers.cpp` edge-case tests)
+- [x] **Automation 4 & Karaoke Templater**: `AutomationEngine` porting `kara-templater`, `cleantags`, `strip-tags`, `macro-1-edgeblur`, `macro-2-mkfullwitdh`, `karaoke-auto-leadin`, and `select-overlaps`
+- [x] **Full Desktop Batch Engines**: 11-field `PasteOverFields`, 4-in-1 `FullTimingProcessor`, `SortSelectedLines`, `TextImportProcessor`, `TimecodesIo` (`v1/v2`), `FindReplaceStepper`, and multi-charset `ExportPipeline`
+- [x] **SGMY Exclusive Domain Suite**: `FixCommonErrors`, `LyricScrollGenerator`, `ChineseConverter`, `SubtitleTextCleaner`, `PairedPunctuationChecker`, `FuriganaAnnotator`, `StitchTimings`, `StyleOverlapChecker`, and `SubtitleOverflowDetector`
 
-### Milestone 2 · Data, HDR Media, Zoomable Audio & Styles (`:core:data`, `:feature:*`) ✅
-- [x] Room persistence (projects, manual snapshots, timeline bookmarks) + DataStore preferences & 34 customizable hotkeys
+### Milestone 2 · Data, HDR Media, Playable Dummy Video & Zoomable Audio (`:core:data`, `:feature:*`) ✅
+- [x] Room persistence (projects, snapshots, bookmarks) + DataStore preferences & customizable hotkeys
 - [x] `AiAnalysisService` (DeepSeek, OpenRouter, Gemini, DashScope, Custom OpenAI-compatible presets; volatile in-memory API key)
-- [x] Media3 `VideoPlayer` with `0.25×–4.0×` pitch-preserving speed, segment playback (`playRange`), HDR10/HLG/Dolby Vision/BT.2020 color detection, and 1080p HDR preview optimization
-- [x] Streaming OOM-safe `WaveformExtractor` + STFT spectrogram + sync-frame keyframe scanner
-- [x] Aspect-locked `SubtitleOverlay` & 8-mode `VisualTypesettingOverlay`
-- [x] Zoomable `AegisubAudioBox` (`2s–60s` window, keyframe snap, ghost neighbor lines, karaoke syllable drag)
+- [x] Media3 `VideoPlayer` with `0.25×–4.0×` pitch-preserving speed, `playRange`, HDR10/HLG/Dolby Vision/BT.2020 detection, **plus playable monotonic Dummy Video clock**
+- [x] Streaming OOM-safe `WaveformExtractor` + STFT spectrogram + keyframe scanner
+- [x] Aspect-locked `SubtitleOverlay` & 8-mode `VisualTypesettingOverlay` + zoomable `AegisubAudioBox`
 - [x] Dual-pane Global Style Storage + Script Styles Manager
 
-### Milestone 3 · Unified Adaptive Studio Workspace (`:app`) ✅
-- [x] Single-screen `WorkspaceScreen` replacing legacy split `EditorScreen` / `PreviewScreen`
-- [x] Jetpack `WindowInfoTracker` + `FoldingFeature` 5-posture engine:
-  - [x] `DESKTOP_THREE_ZONE` (Tablet / Unfolded / DeX resizable 3-zone desktop replica)
-  - [x] `BOOK_DUAL_PANE` (Vertical foldable hinge dual-page studio)
-  - [x] `TABLETOP` (Horizontal half-opened foldable laptop posture)
-  - [x] `LANDSCAPE_SPLIT` (Phone landscape draggable 2-column studio)
-  - [x] `PHONE_COMPACT` (Phone portrait 4-mode stage switcher + thumb navigation bar)
-- [x] All 27 SGMY & desktop Aegisub dialogs/sheets integrated
-- [x] Bilingual documentation ([README.md](README.md) & [README_CN.md](README_CN.md)) + GitHub Actions CI
+### Milestone 3 · Clean Adaptive Studio UI & Full Keyboard/Mouse Support (`:app`) ✅
+- [x] Clean, intuitive Material 3 Studio UI across 5 hardware postures (`DESKTOP_THREE_ZONE`, `BOOK_DUAL_PANE`, `TABLETOP`, `LANDSCAPE_SPLIT`, `PHONE_COMPACT`)
+- [x] Complete physical keyboard & mouse/trackpad support (focus-isolated hotkeys, right-click menus across grid/projects/video/audio, `Ctrl+Click` / `Shift+Click`, wheel pan & zoom, hover cursors)
+- [x] All 34 Desktop Aegisub & SGMY engineering dialogs wired end-to-end
+- [x] Bilingual documentation ([README.md](README.md) ↔ [README_CN.md](README_CN.md)) + GitHub Actions CI
 
 ---
 
 ## Future Horizons
 - [ ] Optional native `libass` JNI pixel-exact renderer backend alongside the Compose real-time vector overlay
 - [ ] Embedded Matroska (`.mkv`) subtitle track demuxing & font attachment extraction
-- [ ] Lua / MoonScript Automation 4 sandboxed runtime
+- [ ] User-supplied external `.lua` / `.moon` script interpreter sandbox

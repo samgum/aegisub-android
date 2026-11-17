@@ -50,16 +50,12 @@ import io.github.samgum.aegisub.domain.edit.FramerateConverter
 import io.github.samgum.aegisub.domain.edit.KaraokeMode
 import io.github.samgum.aegisub.domain.edit.SelectLines
 import io.github.samgum.aegisub.domain.edit.ShiftTarget
-import io.github.samgum.aegisub.domain.edit.SortKey
-import io.github.samgum.aegisub.domain.edit.SortOrder
-import io.github.samgum.aegisub.domain.format.FormatRegistry
-import io.github.samgum.aegisub.domain.format.SubtitleFormat
 import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.model.AssScript
-import io.github.samgum.aegisub.domain.text.FindReplace
 import io.github.samgum.aegisub.domain.time.SubTime
 import io.github.samgum.aegisub.feature.editor.components.StylingAssistantSheet
 import io.github.samgum.aegisub.feature.editor.components.TranslationAssistantSheet
+import io.github.samgum.aegisub.feature.preview.PlaybackState
 import io.github.samgum.aegisub.ui.workspace.WorkspaceViewModel
 import io.github.samgum.aegisub.ui.workspace.components.WorkspaceDialogType
 import java.text.SimpleDateFormat
@@ -67,7 +63,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 统一工作台全量对话框调度中心（27 类桌面 Aegisub + SGMY 弹窗一键路由）。
+ * 统一工作台全量对话框调度中心（34 类桌面 Aegisub 标准功能 + SGMY 扩展弹窗一键路由）。
  *
  * @author 伤感咩吖
  */
@@ -77,18 +73,26 @@ fun WorkspaceDialogHost(
     script: AssScript,
     activeEvent: AssEvent?,
     selectedIds: Set<Long>,
+    hasMedia: Boolean,
+    playback: PlaybackState,
+    keyframesMs: List<Long>,
+    timecodesMs: List<Long>,
     settings: UserSettings,
     snapshots: List<Snapshot>,
     bookmarks: List<Bookmark>,
     viewModel: WorkspaceViewModel,
     onSwitchDialog: (WorkspaceDialogType?) -> Unit,
-    onExportFormatPicked: (SubtitleFormat) -> Unit,
+    onImportKeyframes: () -> Unit,
+    onExportKeyframes: () -> Unit,
+    onImportTimecodes: () -> Unit,
+    onExportTimecodes: () -> Unit,
+    onExportConfigured: (ExportDialogSelection) -> Unit,
 ) {
     if (dialogType == null) return
     val dismiss = { onSwitchDialog(null) }
 
     when (dialogType) {
-        // -------- SGMY 9 大独家工具 --------
+        // -------- SGMY 9 大扩展工具 --------
         WorkspaceDialogType.SGMY_FIX_COMMON_ERRORS -> SgmyFixCommonErrorsDialog(
             selectedIds = selectedIds,
             onApply = viewModel::applyFixCommonErrors,
@@ -138,11 +142,11 @@ fun WorkspaceDialogHost(
             onDismiss = dismiss,
         )
 
-        // -------- 桌面 Aegisub 18 类标准专业对话框 --------
-        WorkspaceDialogType.EXPORT -> ExportFormatDialog(
-            onPick = { fmt ->
+        // -------- 桌面 Aegisub 25 类完整专业对话框 --------
+        WorkspaceDialogType.EXPORT -> ExportPipelineDialog(
+            onConfirm = { cfg ->
                 dismiss()
-                onExportFormatPicked(fmt)
+                onExportConfigured(cfg)
             },
             onDismiss = dismiss,
         )
@@ -162,6 +166,21 @@ fun WorkspaceDialogHost(
             onDismiss = dismiss,
         )
 
+        WorkspaceDialogType.ATTACHMENTS -> AttachmentsDialog(
+            attachments = script.attachments,
+            onAddAttachment = viewModel::addAttachment,
+            onRemoveAttachment = viewModel::removeAttachment,
+            onDismiss = dismiss,
+        )
+
+        WorkspaceDialogType.TEXT_IMPORT_OPTIONS -> TextImportOptionsDialog(
+            onApply = { opts ->
+                viewModel.applyTextImportActorParse(opts)
+                dismiss()
+            },
+            onDismiss = dismiss,
+        )
+
         WorkspaceDialogType.HISTORY_SNAPSHOTS -> HistorySnapshotsDialog(
             snapshots = snapshots,
             onSaveNew = { label -> viewModel.takeSnapshot(label) },
@@ -178,20 +197,22 @@ fun WorkspaceDialogHost(
             onDismiss = dismiss,
         )
 
-        WorkspaceDialogType.FIND_REPLACE -> FindReplaceDialog(
+        WorkspaceDialogType.FIND_REPLACE -> FullFindReplaceDialog(
             events = script.events,
             selectedIds = selectedIds,
-            onReplaceAll = { q, r, reg, ic, selOnly ->
-                viewModel.replaceAll(q, r, reg, ic, selOnly)
+            onFindNext = { q, fld, reg, ic -> viewModel.findNextMatch(q, fld, reg, ic) },
+            onReplaceNext = { q, r, fld, reg, ic -> viewModel.replaceCurrentAndFindNext(q, r, fld, reg, ic) },
+            onReplaceAll = { q, r, fld, reg, ic, selOnly ->
+                viewModel.replaceAll(q, r, reg, ic, selOnly, fld)
                 dismiss()
             },
             onDismiss = dismiss,
         )
 
-        WorkspaceDialogType.PASTE_OVER -> PasteOverDialog(
+        WorkspaceDialogType.PASTE_OVER -> FullPasteOverDialog(
             targetCount = if (selectedIds.isNotEmpty()) selectedIds.size else script.events.size,
-            onApply = { raw ->
-                viewModel.pasteOver(raw)
+            onApply = { raw, fields ->
+                viewModel.pasteOver(raw, fields)
                 dismiss()
             },
             onDismiss = dismiss,
@@ -215,11 +236,19 @@ fun WorkspaceDialogHost(
             onDismiss = dismiss,
         )
 
-        WorkspaceDialogType.SORT_LINES -> SortLinesDialog(
-            onSort = { key, order ->
-                viewModel.sortLines(key, order)
+        WorkspaceDialogType.SORT_LINES -> FullSortLinesDialog(
+            selectedCount = selectedIds.size,
+            onSort = { key, order, selOnly ->
+                viewModel.sortLines(key, order, selOnly)
                 dismiss()
             },
+            onDismiss = dismiss,
+        )
+
+        WorkspaceDialogType.SPELL_CHECKER -> SpellCheckerDialog(
+            events = script.events,
+            onJumpToEvent = { id -> viewModel.selectEvent(id) },
+            onFixEventText = { id, newText -> viewModel.updateEventText(id, newText) },
             onDismiss = dismiss,
         )
 
@@ -233,11 +262,14 @@ fun WorkspaceDialogHost(
             onDismiss = dismiss,
         )
 
-        WorkspaceDialogType.TIMING_POST_PROCESS -> TimingPostProcessDialog(
+        WorkspaceDialogType.TIMING_POST_PROCESS -> FullTimingProcessorDialog(
+            styleNames = script.styles.map { it.name },
+            selectedIds = selectedIds,
+            keyframeCount = keyframesMs.size,
             defaultLeadIn = settings.defaultLeadInMs,
             defaultLeadOut = settings.defaultLeadOutMs,
-            onApply = { leadIn, leadOut, gap ->
-                viewModel.applyTimingPostProcess(leadIn, leadOut, gap)
+            onApply = { cfg ->
+                viewModel.applyFullTimingProcessor(cfg)
                 dismiss()
             },
             onDismiss = dismiss,
@@ -267,6 +299,42 @@ fun WorkspaceDialogHost(
                 viewModel.resampleResolution(w, h, pos, bord)
                 dismiss()
             },
+            onDismiss = dismiss,
+        )
+
+        WorkspaceDialogType.DUMMY_VIDEO -> DummyVideoDialog(
+            playback = playback,
+            onApply = { w, h, fps, durMs, colorArgb, checker ->
+                viewModel.openDummyVideo(w, h, fps, durMs, colorArgb, checker)
+                dismiss()
+            },
+            onDismiss = dismiss,
+        )
+
+        WorkspaceDialogType.JUMP_TO -> JumpToDialog(
+            playback = playback,
+            timecodesMs = timecodesMs,
+            onSeek = viewModel::seekTo,
+            onDismiss = dismiss,
+        )
+
+        WorkspaceDialogType.VIDEO_DETAILS -> VideoDetailsDialog(
+            script = script,
+            hasMedia = hasMedia,
+            playback = playback,
+            keyframeCount = keyframesMs.size,
+            timecodeCount = timecodesMs.size,
+            onImportKeyframes = onImportKeyframes,
+            onExportKeyframes = onExportKeyframes,
+            onImportTimecodes = onImportTimecodes,
+            onExportTimecodes = onExportTimecodes,
+            onOpenDummyVideo = { onSwitchDialog(WorkspaceDialogType.DUMMY_VIDEO) },
+            onDismiss = dismiss,
+        )
+
+        WorkspaceDialogType.AUTOMATION_MANAGER -> AutomationManagerDialog(
+            onRunMacro = viewModel::runAutomationMacro,
+            onInsertTemplateStarter = viewModel::insertKaraokeTemplateStarter,
             onDismiss = dismiss,
         )
 
@@ -317,40 +385,6 @@ fun WorkspaceDialogHost(
             }
         }
     }
-}
-
-@Composable
-private fun ExportFormatDialog(
-    onPick: (SubtitleFormat) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("导出字幕与歌词") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                FormatRegistry.formats.forEach { fmt ->
-                    val ext = fmt.extensions.firstOrNull() ?: ".ass"
-                    val desc = when (fmt.name.lowercase()) {
-                        "ass" -> "Advanced SubStation Alpha（完整保留样式、排版与卡拉OK）"
-                        "ssa" -> "SubStation Alpha v4.00 兼容格式"
-                        "srt" -> "SubRip 通用视频字幕"
-                        "vtt" -> "WebVTT 网页字幕"
-                        "ttml" -> "TTML / Apple Music 逐词时间文本"
-                        "lrc" -> "LRC 音乐歌词（支持逐字卡拉OK标签）"
-                        "sub" -> "MicroDVD 帧号字幕"
-                        else -> "纯文本台词稿"
-                    }
-                    ListItem(
-                        headlineContent = { Text("${fmt.name.uppercase()} ($ext)") },
-                        supportingContent = { Text(desc, style = MaterialTheme.typography.bodySmall) },
-                        modifier = Modifier.clickable { onPick(fmt) },
-                    )
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
 }
 
 @Composable
@@ -524,72 +558,6 @@ private fun BookmarksDialog(
 }
 
 @Composable
-private fun FindReplaceDialog(
-    events: List<AssEvent>,
-    selectedIds: Set<Long>,
-    onReplaceAll: (String, String, Boolean, Boolean, Boolean) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var query by remember { mutableStateOf("") }
-    var replacement by remember { mutableStateOf("") }
-    var useRegex by remember { mutableStateOf(false) }
-    var ignoreCase by remember { mutableStateOf(true) }
-    var selectedOnly by remember { mutableStateOf(selectedIds.isNotEmpty()) }
-
-    val matchCount = remember(events, query, useRegex, ignoreCase, selectedOnly) {
-        if (query.isEmpty()) 0
-        else events.sumOf { e ->
-            if (selectedOnly && selectedIds.isNotEmpty() && e.id !in selectedIds) 0
-            else FindReplace.count(e.text, query, useRegex, ignoreCase)
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("查找与批量替换") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("查找内容") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = replacement, onValueChange = { replacement = it }, label = { Text("替换为") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                SgmyCheckRow("忽略大小写", ignoreCase) { ignoreCase = it }
-                SgmyCheckRow("使用正则表达式 (Regex)", useRegex) { useRegex = it }
-                if (selectedIds.isNotEmpty()) {
-                    SgmyCheckRow("仅限选中的 ${selectedIds.size} 行", selectedOnly) { selectedOnly = it }
-                }
-                Text("当前共匹配 $matchCount 处", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            }
-        },
-        confirmButton = {
-            Button(enabled = query.isNotEmpty(), onClick = { onReplaceAll(query, replacement, useRegex, ignoreCase, selectedOnly) }) {
-                Text("全部替换")
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
-}
-
-@Composable
-private fun PasteOverDialog(
-    targetCount: Int,
-    onApply: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var raw by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("粘贴覆盖文本 (Paste Over)") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("每行一条新台词，将按顺序覆盖目标 $targetCount 条事件的文本而完整保留原有时间轴与样式：", style = MaterialTheme.typography.bodySmall)
-                OutlinedTextField(value = raw, onValueChange = { raw = it }, minLines = 6, maxLines = 12, modifier = Modifier.fillMaxWidth())
-            }
-        },
-        confirmButton = { Button(enabled = raw.isNotBlank(), onClick = { onApply(raw) }) { Text("覆盖文本") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
-}
-
-@Composable
 private fun SelectLinesDialog(
     onApply: (SelectLines.Criteria) -> Unit,
     onDismiss: () -> Unit,
@@ -659,34 +627,6 @@ private fun StyleReplaceDialog(
 }
 
 @Composable
-private fun SortLinesDialog(
-    onSort: (SortKey, SortOrder) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var key by remember { mutableStateOf(SortKey.START) }
-    var order by remember { mutableStateOf(SortOrder.ASCENDING) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("排序字幕行") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    SortKey.entries.forEach { k ->
-                        FilterChip(selected = key == k, onClick = { key = k }, label = { Text(k.name) })
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = order == SortOrder.ASCENDING, onClick = { order = SortOrder.ASCENDING }, label = { Text("升序 ↑") })
-                    FilterChip(selected = order == SortOrder.DESCENDING, onClick = { order = SortOrder.DESCENDING }, label = { Text("降序 ↓") })
-                }
-            }
-        },
-        confirmButton = { Button(onClick = { onSort(key, order) }) { Text("排序") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
-}
-
-@Composable
 private fun ShiftTimesDialog(
     hasSelection: Boolean,
     onApply: (Long, ShiftTarget, Boolean, Boolean) -> Unit,
@@ -731,35 +671,6 @@ private fun ShiftTimesDialog(
                 val absMs = msText.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
                 onApply(if (backward) -absMs else absMs, target, afterActive, selOnly)
             }) { Text("平移时间") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
-}
-
-@Composable
-private fun TimingPostProcessDialog(
-    defaultLeadIn: Int,
-    defaultLeadOut: Int,
-    onApply: (Long, Long, Long) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var leadIn by remember { mutableStateOf(defaultLeadIn.toString()) }
-    var leadOut by remember { mutableStateOf(defaultLeadOut.toString()) }
-    var gap by remember { mutableStateOf("80") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("时间后处理器 (Timing Post-Processor)") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = leadIn, onValueChange = { leadIn = it }, label = { Text("前导延长 Lead-In (ms)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = leadOut, onValueChange = { leadOut = it }, label = { Text("后导延长 Lead-Out (ms)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = gap, onValueChange = { gap = it }, label = { Text("相邻最小无重叠间隔 (ms)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                onApply(leadIn.toLongOrNull() ?: 0L, leadOut.toLongOrNull() ?: 0L, gap.toLongOrNull() ?: 0L)
-            }) { Text("应用后处理") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )

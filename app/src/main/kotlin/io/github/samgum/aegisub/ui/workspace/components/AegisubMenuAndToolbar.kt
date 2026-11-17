@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.BookmarkBorder
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PrecisionManufacturing
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
@@ -68,11 +70,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.samgum.aegisub.data.settings.TagDisplayMode
+import io.github.samgum.aegisub.domain.automation.AutomationEngine
 import io.github.samgum.aegisub.ui.adaptive.AdaptiveWindowState
 import io.github.samgum.aegisub.ui.workspace.WorkspaceDisplayPreset
 
 /**
- * 统一工作台动作路由枚举。
+ * 统一工作台动作路由枚举（覆盖完整桌面 Aegisub 标准功能 + SGMY 扩展工具）。
  *
  * @author 伤感咩吖
  */
@@ -80,6 +83,8 @@ enum class WorkspaceDialogType {
     EXPORT,
     PROPERTIES,
     FONTS_COLLECTOR,
+    ATTACHMENTS,
+    TEXT_IMPORT_OPTIONS,
     HISTORY_SNAPSHOTS,
     BOOKMARKS,
     FIND_REPLACE,
@@ -87,11 +92,16 @@ enum class WorkspaceDialogType {
     SELECT_LINES,
     STYLE_REPLACE,
     SORT_LINES,
+    SPELL_CHECKER,
     SHIFT_TIMES,
     TIMING_POST_PROCESS,
     KANJI_TIMER,
     FRAMERATE_CONVERT,
     RESAMPLE_RESOLUTION,
+    DUMMY_VIDEO,
+    JUMP_TO,
+    VIDEO_DETAILS,
+    AUTOMATION_MANAGER,
     STYLING_ASSISTANT,
     TRANSLATION_ASSISTANT,
     KARAOKE_GENERATOR,
@@ -125,12 +135,15 @@ fun DesktopMenuAndToolbar(
     onCloseVideo: () -> Unit,
     onImportKeyframes: () -> Unit,
     onExportKeyframes: () -> Unit,
+    onImportTimecodes: () -> Unit,
+    onExportTimecodes: () -> Unit,
     onOpenStyleManager: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAbout: () -> Unit,
     onCycleTagMode: () -> Unit,
     onSetDisplayPreset: (WorkspaceDisplayPreset) -> Unit,
     onOpenDialog: (WorkspaceDialogType) -> Unit,
+    onRunAutomation: (AutomationEngine.BuiltinMacro) -> Unit,
     onQuickSnapshot: () -> Unit,
     onInsertBefore: () -> Unit,
     onInsertAfter: () -> Unit,
@@ -143,6 +156,9 @@ fun DesktopMenuAndToolbar(
     onRecombine: () -> Unit,
     onMakeContinuousEnd: () -> Unit,
     onMakeContinuousStart: () -> Unit,
+    onShiftSelectionToVideo: () -> Unit,
+    onSnapToScene: () -> Unit,
+    onCutLines: () -> Unit,
     onCopyLines: () -> Unit,
     onPasteLines: () -> Unit,
     onSelectAll: () -> Unit,
@@ -177,8 +193,10 @@ fun DesktopMenuAndToolbar(
                     ShortcutMenuItem("保存快照", "Ctrl+S") { dismiss(); onQuickSnapshot() }
                     ShortcutMenuItem("历史版本管理…") { dismiss(); onOpenDialog(WorkspaceDialogType.HISTORY_SNAPSHOTS) }
                     ShortcutMenuItem("导出字幕与歌词…", "Ctrl+E") { dismiss(); onOpenDialog(WorkspaceDialogType.EXPORT) }
+                    ShortcutMenuItem("纯文本台词分角解析…") { dismiss(); onOpenDialog(WorkspaceDialogType.TEXT_IMPORT_OPTIONS) }
                     HorizontalDivider()
                     ShortcutMenuItem("脚本属性…") { dismiss(); onOpenDialog(WorkspaceDialogType.PROPERTIES) }
+                    ShortcutMenuItem("内嵌字体与图片附件…") { dismiss(); onOpenDialog(WorkspaceDialogType.ATTACHMENTS) }
                     ShortcutMenuItem("字体使用检查…") { dismiss(); onOpenDialog(WorkspaceDialogType.FONTS_COLLECTOR) }
                     HorizontalDivider()
                     ShortcutMenuItem("返回工程列表") { dismiss(); onBack() }
@@ -188,9 +206,10 @@ fun DesktopMenuAndToolbar(
                     ShortcutMenuItem("撤销", "Ctrl+Z", enabled = canUndo) { dismiss(); onUndo() }
                     ShortcutMenuItem("重做", "Ctrl+Y", enabled = canRedo) { dismiss(); onRedo() }
                     HorizontalDivider()
+                    ShortcutMenuItem("剪切选中行", "Ctrl+X") { dismiss(); onCutLines() }
                     ShortcutMenuItem("复制选中行", "Ctrl+Shift+C") { dismiss(); onCopyLines() }
                     ShortcutMenuItem("粘贴字幕行", "Ctrl+Shift+V") { dismiss(); onPasteLines() }
-                    ShortcutMenuItem("粘贴覆盖文本…") { dismiss(); onOpenDialog(WorkspaceDialogType.PASTE_OVER) }
+                    ShortcutMenuItem("选择字段粘贴覆盖…") { dismiss(); onOpenDialog(WorkspaceDialogType.PASTE_OVER) }
                     HorizontalDivider()
                     ShortcutMenuItem("查找与替换…", "Ctrl+F") { dismiss(); onOpenDialog(WorkspaceDialogType.FIND_REPLACE) }
                 }
@@ -215,13 +234,16 @@ fun DesktopMenuAndToolbar(
                     HorizontalDivider()
                     ShortcutMenuItem("排序字幕行…") { dismiss(); onOpenDialog(WorkspaceDialogType.SORT_LINES) }
                     ShortcutMenuItem("按条件选择行…") { dismiss(); onOpenDialog(WorkspaceDialogType.SELECT_LINES) }
+                    ShortcutMenuItem("拼写与错字检查…") { dismiss(); onOpenDialog(WorkspaceDialogType.SPELL_CHECKER) }
                     ShortcutMenuItem("全选所有行", "Ctrl+Shift+A") { dismiss(); onSelectAll() }
                     ShortcutMenuItem("删除空白行") { dismiss(); onDeleteEmpty() }
                 }
 
                 MenuDropdownButton("时间轴") { dismiss ->
                     ShortcutMenuItem("平移时间…") { dismiss(); onOpenDialog(WorkspaceDialogType.SHIFT_TIMES) }
-                    ShortcutMenuItem("时间后处理（前后导 / 去重叠）…") { dismiss(); onOpenDialog(WorkspaceDialogType.TIMING_POST_PROCESS) }
+                    ShortcutMenuItem("将选中行起点对齐到当前帧") { dismiss(); onShiftSelectionToVideo() }
+                    ShortcutMenuItem("吸附当前行到场景关键帧") { dismiss(); onSnapToScene() }
+                    ShortcutMenuItem("时间后处理器…") { dismiss(); onOpenDialog(WorkspaceDialogType.TIMING_POST_PROCESS) }
                     ShortcutMenuItem("时间缝合器…") { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_STITCH_TIMINGS) }
                     ShortcutMenuItem("同样式重叠检查…") { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_STYLE_OVERLAP) }
                     HorizontalDivider()
@@ -236,12 +258,30 @@ fun DesktopMenuAndToolbar(
 
                 MenuDropdownButton("音视频") { dismiss ->
                     ShortcutMenuItem("打开视频或音频文件…") { dismiss(); onPickVideo() }
+                    ShortcutMenuItem("使用虚拟视频画布…") { dismiss(); onOpenDialog(WorkspaceDialogType.DUMMY_VIDEO) }
                     if (hasMedia) {
                         ShortcutMenuItem("关闭当前媒体") { dismiss(); onCloseVideo() }
                     }
                     HorizontalDivider()
+                    ShortcutMenuItem("跳转到时间或帧号…", "Ctrl+G") { dismiss(); onOpenDialog(WorkspaceDialogType.JUMP_TO) }
+                    ShortcutMenuItem("视频与时间码详情…") { dismiss(); onOpenDialog(WorkspaceDialogType.VIDEO_DETAILS) }
+                    HorizontalDivider()
                     ShortcutMenuItem("导入关键帧文件…") { dismiss(); onImportKeyframes() }
                     ShortcutMenuItem("导出关键帧文件…") { dismiss(); onExportKeyframes() }
+                    ShortcutMenuItem("导入 VFR 时间码文件…") { dismiss(); onImportTimecodes() }
+                    ShortcutMenuItem("导出 VFR 时间码文件…") { dismiss(); onExportTimecodes() }
+                }
+
+                MenuDropdownButton("自动化") { dismiss ->
+                    ShortcutMenuItem("应用卡拉OK模板") { dismiss(); onRunAutomation(AutomationEngine.BuiltinMacro.KARAOKE_TEMPLATER) }
+                    ShortcutMenuItem("清理整理标签") { dismiss(); onRunAutomation(AutomationEngine.BuiltinMacro.CLEAN_TAGS) }
+                    ShortcutMenuItem("添加边缘柔化 (\\be1)") { dismiss(); onRunAutomation(AutomationEngine.BuiltinMacro.ADD_EDGE_BLUR) }
+                    ShortcutMenuItem("半角字符转全角") { dismiss(); onRunAutomation(AutomationEngine.BuiltinMacro.MAKE_FULLWIDTH) }
+                    ShortcutMenuItem("剥离全部覆盖标签") { dismiss(); onRunAutomation(AutomationEngine.BuiltinMacro.STRIP_TAGS) }
+                    ShortcutMenuItem("卡拉OK自动前导衔接") { dismiss(); onRunAutomation(AutomationEngine.BuiltinMacro.KARAOKE_AUTO_LEADIN) }
+                    ShortcutMenuItem("选中所有时间重叠行") { dismiss(); onRunAutomation(AutomationEngine.BuiltinMacro.SELECT_OVERLAPS) }
+                    HorizontalDivider()
+                    ShortcutMenuItem("自动化脚本管理器…") { dismiss(); onOpenDialog(WorkspaceDialogType.AUTOMATION_MANAGER) }
                 }
 
                 MenuDropdownButton("工具") { dismiss ->
@@ -296,15 +336,19 @@ fun DesktopMenuAndToolbar(
                 ToolbarDivider()
                 ToolbarIconBtn(Icons.Filled.Palette, "样式管理器", onClick = onOpenStyleManager)
                 ToolbarIconBtn(Icons.Filled.Tune, "脚本属性") { onOpenDialog(WorkspaceDialogType.PROPERTIES) }
+                ToolbarIconBtn(Icons.Filled.AttachFile, "内嵌附件") { onOpenDialog(WorkspaceDialogType.ATTACHMENTS) }
                 ToolbarIconBtn(Icons.Filled.FontDownload, "字体检查") { onOpenDialog(WorkspaceDialogType.FONTS_COLLECTOR) }
                 ToolbarIconBtn(Icons.Filled.AspectRatio, "分辨率重采样") { onOpenDialog(WorkspaceDialogType.RESAMPLE_RESOLUTION) }
                 ToolbarDivider()
                 ToolbarIconBtn(Icons.Filled.FindReplace, "查找替换") { onOpenDialog(WorkspaceDialogType.FIND_REPLACE) }
                 ToolbarIconBtn(Icons.Filled.Schedule, "平移时间") { onOpenDialog(WorkspaceDialogType.SHIFT_TIMES) }
                 ToolbarIconBtn(Icons.Filled.SelectAll, "按条件选行") { onOpenDialog(WorkspaceDialogType.SELECT_LINES) }
-                ToolbarIconBtn(Icons.Filled.ContentPaste, "粘贴覆盖") { onOpenDialog(WorkspaceDialogType.PASTE_OVER) }
+                ToolbarIconBtn(Icons.Filled.ContentPaste, "选择字段粘贴覆盖") { onOpenDialog(WorkspaceDialogType.PASTE_OVER) }
                 ToolbarIconBtn(Icons.Filled.Translate, "翻译助手") { onOpenDialog(WorkspaceDialogType.TRANSLATION_ASSISTANT) }
                 ToolbarIconBtn(Icons.Filled.BookmarkBorder, "书签") { onOpenDialog(WorkspaceDialogType.BOOKMARKS) }
+                ToolbarIconBtn(Icons.Filled.PrecisionManufacturing, "自动化与卡拉OK模板") {
+                    onOpenDialog(WorkspaceDialogType.AUTOMATION_MANAGER)
+                }
                 ToolbarDivider()
                 ToolbarIconBtn(Icons.Filled.AutoFixHigh, "修复常见错误", tintPrimary = true) {
                     onOpenDialog(WorkspaceDialogType.SGMY_FIX_COMMON_ERRORS)
@@ -439,17 +483,21 @@ fun StudioToolboxSheet(
                 }
             }
 
-            ToolboxGroupTitle("智能修复与创意生成")
+            ToolboxGroupTitle("自动化与智能生成")
             ToolboxTwoColumnRow(
-                "修复常见错误" to { onOpenDialog(WorkspaceDialogType.SGMY_FIX_COMMON_ERRORS) },
+                "自动化与卡拉OK模板" to { onOpenDialog(WorkspaceDialogType.AUTOMATION_MANAGER) },
                 "滚动歌词生成器" to { onOpenDialog(WorkspaceDialogType.SGMY_LYRIC_SCROLL) },
             )
             ToolboxTwoColumnRow(
+                "修复常见错误" to { onOpenDialog(WorkspaceDialogType.SGMY_FIX_COMMON_ERRORS) },
                 "AI 语法与润色" to { onOpenDialog(WorkspaceDialogType.SGMY_AI_ANALYSIS) },
+            )
+            ToolboxTwoColumnRow(
                 "生成卡拉OK音节" to { onOpenDialog(WorkspaceDialogType.KARAOKE_GENERATOR) },
+                "汉字卡拉OK计时复制" to { onOpenDialog(WorkspaceDialogType.KANJI_TIMER) },
             )
 
-            ToolboxGroupTitle("中日韩文本校对")
+            ToolboxGroupTitle("校对与中日韩文本")
             ToolboxTwoColumnRow(
                 "简繁中文转换" to { onOpenDialog(WorkspaceDialogType.SGMY_CHINESE_CONVERT) },
                 "字幕文本清理" to { onOpenDialog(WorkspaceDialogType.SGMY_TEXT_CLEANUP) },
@@ -458,6 +506,10 @@ fun StudioToolboxSheet(
                 "配对标点检查" to { onOpenDialog(WorkspaceDialogType.SGMY_PAIR_CHECK) },
                 "日语假名注音" to { onOpenDialog(WorkspaceDialogType.SGMY_FURIGANA) },
             )
+            ToolboxTwoColumnRow(
+                "拼写与错字检查" to { onOpenDialog(WorkspaceDialogType.SPELL_CHECKER) },
+                "纯文本台词分角解析" to { onOpenDialog(WorkspaceDialogType.TEXT_IMPORT_OPTIONS) },
+            )
 
             ToolboxGroupTitle("时间轴与批量编辑")
             ToolboxTwoColumnRow(
@@ -465,22 +517,30 @@ fun StudioToolboxSheet(
                 "平移时间轴" to { onOpenDialog(WorkspaceDialogType.SHIFT_TIMES) },
             )
             ToolboxTwoColumnRow(
-                "时间缝合与重叠检查" to { onOpenDialog(WorkspaceDialogType.SGMY_STITCH_TIMINGS) },
                 "时间后处理器" to { onOpenDialog(WorkspaceDialogType.TIMING_POST_PROCESS) },
+                "时间缝合与重叠检查" to { onOpenDialog(WorkspaceDialogType.SGMY_STITCH_TIMINGS) },
             )
             ToolboxTwoColumnRow(
                 "按条件批量选行" to { onOpenDialog(WorkspaceDialogType.SELECT_LINES) },
-                "粘贴覆盖文本" to { onOpenDialog(WorkspaceDialogType.PASTE_OVER) },
+                "选择字段粘贴覆盖" to { onOpenDialog(WorkspaceDialogType.PASTE_OVER) },
+            )
+            ToolboxTwoColumnRow(
+                "排序字幕行" to { onOpenDialog(WorkspaceDialogType.SORT_LINES) },
+                "帧率转换 / 书签" to { onOpenDialog(WorkspaceDialogType.FRAMERATE_CONVERT) },
             )
 
-            ToolboxGroupTitle("样式、画幅与导出")
+            ToolboxGroupTitle("画幅、视频、附件与导出")
             ToolboxTwoColumnRow(
                 "样式管理器" to onOpenStyleManager,
                 "样式 / 翻译助手" to { onOpenDialog(WorkspaceDialogType.TRANSLATION_ASSISTANT) },
             )
             ToolboxTwoColumnRow(
-                "分辨率重采样" to { onOpenDialog(WorkspaceDialogType.RESAMPLE_RESOLUTION) },
-                "脚本属性与字体" to { onOpenDialog(WorkspaceDialogType.PROPERTIES) },
+                "虚拟视频画布" to { onOpenDialog(WorkspaceDialogType.DUMMY_VIDEO) },
+                "跳帧定位 / 视频详情" to { onOpenDialog(WorkspaceDialogType.JUMP_TO) },
+            )
+            ToolboxTwoColumnRow(
+                "内嵌字体与图片附件" to { onOpenDialog(WorkspaceDialogType.ATTACHMENTS) },
+                "脚本属性与字体检查" to { onOpenDialog(WorkspaceDialogType.PROPERTIES) },
             )
             val tagLabel = when (tagDisplayMode) {
                 TagDisplayMode.SHOW_TAGS -> "标签：完整显示"
@@ -489,11 +549,11 @@ fun StudioToolboxSheet(
             }
             ToolboxTwoColumnRow(
                 tagLabel to onCycleTagMode,
-                "历史版本快照" to { onOpenDialog(WorkspaceDialogType.HISTORY_SNAPSHOTS) },
+                "分辨率重采样" to { onOpenDialog(WorkspaceDialogType.RESAMPLE_RESOLUTION) },
             )
             ToolboxTwoColumnRow(
-                "导出字幕与歌词" to { onOpenDialog(WorkspaceDialogType.EXPORT) },
-                "帧率转换 / 书签" to { onOpenDialog(WorkspaceDialogType.FRAMERATE_CONVERT) },
+                "导出字幕与滤镜" to { onOpenDialog(WorkspaceDialogType.EXPORT) },
+                "历史版本快照" to { onOpenDialog(WorkspaceDialogType.HISTORY_SNAPSHOTS) },
             )
         }
     }

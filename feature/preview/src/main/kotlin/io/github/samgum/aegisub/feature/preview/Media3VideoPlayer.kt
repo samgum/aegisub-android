@@ -1,6 +1,7 @@
 package io.github.samgum.aegisub.feature.preview
 
 import android.content.Context
+import android.os.SystemClock
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
@@ -25,11 +26,9 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Media3 ExoPlayer 专业版封装（复刻 samgum/Aegisub SGMY 视频与音频引擎特性）：
- * - 支持 **0.25x–4.0x 保调变速**（`PlaybackParameters(rate, 1.0f)`）
- * - 自动识别 **BT.2020 / HDR10 (PQ) / HLG / Dolby Vision** 色彩空间并支持 1080p 预览降采样优化
- * - 支持桌面 Aegisub 标志性 **区间自动停播 (`playRange`)**（播放选中行、首尾 500ms、前后导试听）
- * - 25ms 高刷采样驱动 `\move` / `\t` / 卡拉OK `\kf` 扫词与音频波形游标顺滑跟手
+ * Media3 ExoPlayer + Dummy Video 双模播放引擎：
+ * - 挂载真实音视频时：支持 0.25x–4.0x 保调倍速、BT.2020/HDR10/HLG/Dolby Vision 识别与 1080p 降采样、区间自动停播
+ * - 未挂载真实媒体或主动开启 Dummy Video 时：内置高精度单调虚拟时钟，使 `\move`、`\fad`、`\t`、卡拉OK与滚动歌词无需视频文件即可实时播放预览！
  *
  * @author 伤感咩吖
  */
@@ -44,11 +43,21 @@ class Media3VideoPlayer @Inject constructor(
         .setTrackSelector(trackSelector)
         .build()
 
-    private val _state = MutableStateFlow(PlaybackState())
+    private val _state = MutableStateFlow(
+        PlaybackState(
+            isReady = true,
+            isDummyVideo = true,
+            fps = 23.976f,
+            videoWidth = 1920,
+            videoHeight = 1080,
+            durationMs = 600_000L,
+        ),
+    )
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var pollJob: Job? = null
+    private var dummyClockJob: Job? = null
 
     @Volatile
     private var stopAtPositionMs: Long? = null
@@ -56,6 +65,7 @@ class Media3VideoPlayer @Inject constructor(
     init {
         exoPlayer.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (_state.value.isDummyVideo) return
                 _state.value = _state.value.copy(isPlaying = isPlaying)
                 if (isPlaying) {
                     startPolling()
@@ -66,6 +76,7 @@ class Media3VideoPlayer @Inject constructor(
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
+                if (_state.value.isDummyVideo) return
                 if (playbackState == Player.STATE_READY) {
                     val duration = exoPlayer.duration.coerceAtLeast(0L)
                     _state.value = _state.value.copy(
@@ -84,6 +95,7 @@ class Media3VideoPlayer @Inject constructor(
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (_state.value.isDummyVideo) return
                 _state.value = _state.value.copy(
                     videoWidth = videoSize.width,
                     videoHeight = videoSize.height,
@@ -96,7 +108,7 @@ class Media3VideoPlayer @Inject constructor(
     private fun inspectVideoFormat() {
         val vf = exoPlayer.videoFormat
         val formatFps = vf?.frameRate ?: Format.NO_VALUE.toFloat()
-        val fps = if (formatFps > 0f) formatFps else 0f
+        val fps = if (formatFps > 0f) formatFps else 23.976f
 
         val colorInfo = vf?.colorInfo
         val isBt2020 = colorInfo?.colorSpace == C.COLOR_SPACE_BT2020
@@ -136,70 +148,176 @@ class Media3VideoPlayer @Inject constructor(
     }
 
     override fun setMedia(uri: String) {
+        stopDummyClock()
         stopAtPositionMs = null
+        _state.value = _state.value.copy(
+            isDummyVideo = false,
+            isPlaying = false,
+            isHdr = false,
+            colorInfoLabel = "",
+        )
         exoPlayer.setMediaItem(MediaItem.fromUri(uri))
         exoPlayer.prepare()
     }
 
+    override fun openDummyVideo(
+        width: Int,
+        height: Int,
+        fps: Float,
+        durationMs: Long,
+        colorArgb: Int,
+        checkerboard: Boolean,
+    ) {
+        stopPolling()
+        stopDummyClock()
+        stopAtPositionMs = null
+        exoPlayer.stop()
+        _state.value = _state.value.copy(
+            isReady = true,
+            isPlaying = false,
+            isDummyVideo = true,
+            videoWidth = width.coerceIn(64, 7680),
+            videoHeight = height.coerceIn(64, 4320),
+            fps = fps.coerceIn(1f, 240f),
+            durationMs = durationMs.coerceIn(1_000L, 35_999_990L),
+            positionMs = _state.value.positionMs.coerceIn(0L, durationMs.coerceAtLeast(1_000L)),
+            isHdr = false,
+            colorInfoLabel = "Dummy Video",
+            dummyColorArgb = colorArgb,
+            dummyCheckerboard = checkerboard,
+        )
+    }
+
     override fun play() {
         stopAtPositionMs = null
-        exoPlayer.play()
+        if (_state.value.isDummyVideo) {
+            startDummyClock()
+        } else {
+            exoPlayer.play()
+        }
     }
 
     override fun playRange(startMs: Long, endMs: Long) {
         val safeStart = startMs.coerceAtLeast(0L)
         val safeEnd = endMs.coerceAtLeast(safeStart + 20L)
         stopAtPositionMs = safeEnd
-        exoPlayer.seekTo(safeStart)
-        updatePosition()
-        exoPlayer.play()
+        if (_state.value.isDummyVideo) {
+            if (safeEnd > _state.value.durationMs) {
+                _state.value = _state.value.copy(durationMs = safeEnd + 5_000L)
+            }
+            _state.value = _state.value.copy(positionMs = safeStart)
+            startDummyClock()
+        } else {
+            exoPlayer.seekTo(safeStart)
+            updatePosition()
+            exoPlayer.play()
+        }
     }
 
     override fun pause() {
         stopAtPositionMs = null
-        exoPlayer.pause()
+        if (_state.value.isDummyVideo) {
+            stopDummyClock()
+        } else {
+            exoPlayer.pause()
+        }
     }
 
     override fun seekTo(positionMs: Long) {
         stopAtPositionMs = null
-        exoPlayer.seekTo(positionMs.coerceAtLeast(0L))
-        updatePosition()
+        val clamped = positionMs.coerceAtLeast(0L)
+        if (_state.value.isDummyVideo) {
+            val dur = maxOf(_state.value.durationMs, clamped + 1_000L)
+            _state.value = _state.value.copy(positionMs = clamped, durationMs = dur)
+        } else {
+            exoPlayer.seekTo(clamped)
+            updatePosition()
+        }
     }
 
     override fun setSpeed(rate: Float) {
-        // SGMY 保调变速：0.25x–4.0x，pitch 固定 1.0f 保持原调
         val clamped = rate.coerceIn(0.25f, 4.0f)
-        exoPlayer.playbackParameters = PlaybackParameters(clamped, 1.0f)
+        _state.value = _state.value.copy(speed = clamped)
+        if (!_state.value.isDummyVideo) {
+            exoPlayer.playbackParameters = PlaybackParameters(clamped, 1.0f)
+        }
     }
 
     override fun seekNextFrame() {
-        if (!_state.value.isReady) return
         stopAtPositionMs = null
-        exoPlayer.pause()
-        val fps = _state.value.fps.let { if (it > 0f) it else 30f }
+        val fps = _state.value.fps.let { if (it > 0f) it else 23.976f }
         val frameMs = (1000.0f / fps).toLong().coerceAtLeast(1L)
-        val maxPos = exoPlayer.duration.coerceAtLeast(0L)
-        val target = (exoPlayer.currentPosition + frameMs).coerceAtMost(maxPos)
-        exoPlayer.seekTo(target)
-        updatePosition()
+        if (_state.value.isDummyVideo) {
+            stopDummyClock()
+            val maxPos = _state.value.durationMs.coerceAtLeast(0L)
+            _state.value = _state.value.copy(positionMs = (_state.value.positionMs + frameMs).coerceAtMost(maxPos))
+        } else {
+            if (!_state.value.isReady) return
+            exoPlayer.pause()
+            val maxPos = exoPlayer.duration.coerceAtLeast(0L)
+            val target = (exoPlayer.currentPosition + frameMs).coerceAtMost(maxPos)
+            exoPlayer.seekTo(target)
+            updatePosition()
+        }
     }
 
     override fun seekPreviousFrame() {
-        if (!_state.value.isReady) return
         stopAtPositionMs = null
-        exoPlayer.pause()
-        val fps = _state.value.fps.let { if (it > 0f) it else 30f }
+        val fps = _state.value.fps.let { if (it > 0f) it else 23.976f }
         val frameMs = (1000.0f / fps).toLong().coerceAtLeast(1L)
-        val target = (exoPlayer.currentPosition - frameMs).coerceAtLeast(0L)
-        exoPlayer.seekTo(target)
-        updatePosition()
+        if (_state.value.isDummyVideo) {
+            stopDummyClock()
+            _state.value = _state.value.copy(positionMs = (_state.value.positionMs - frameMs).coerceAtLeast(0L))
+        } else {
+            if (!_state.value.isReady) return
+            exoPlayer.pause()
+            val target = (exoPlayer.currentPosition - frameMs).coerceAtLeast(0L)
+            exoPlayer.seekTo(target)
+            updatePosition()
+        }
     }
 
     override fun release() {
         stopAtPositionMs = null
         stopPolling()
+        stopDummyClock()
         scope.cancel()
         exoPlayer.release()
+    }
+
+    private fun startDummyClock() {
+        if (dummyClockJob?.isActive == true) return
+        _state.value = _state.value.copy(isPlaying = true)
+        dummyClockJob = scope.launch {
+            var lastRealtime = SystemClock.elapsedRealtime()
+            while (isActive) {
+                delay(POLL_INTERVAL_MS)
+                val now = SystemClock.elapsedRealtime()
+                val elapsed = ((now - lastRealtime) * _state.value.speed).toLong()
+                lastRealtime = now
+                val cur = _state.value
+                val nextPos = cur.positionMs + elapsed
+                val limit = stopAtPositionMs
+                if (limit != null && nextPos >= limit) {
+                    stopAtPositionMs = null
+                    _state.value = cur.copy(positionMs = limit, isPlaying = false)
+                    break
+                }
+                if (nextPos >= cur.durationMs) {
+                    _state.value = cur.copy(positionMs = cur.durationMs, isPlaying = false)
+                    break
+                }
+                _state.value = cur.copy(positionMs = nextPos)
+            }
+        }
+    }
+
+    private fun stopDummyClock() {
+        dummyClockJob?.cancel()
+        dummyClockJob = null
+        if (_state.value.isDummyVideo && _state.value.isPlaying) {
+            _state.value = _state.value.copy(isPlaying = false)
+        }
     }
 
     private fun updatePosition() {

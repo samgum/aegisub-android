@@ -18,15 +18,20 @@ import io.github.samgum.aegisub.data.settings.TagDisplayMode
 import io.github.samgum.aegisub.data.settings.UserSettings
 import io.github.samgum.aegisub.domain.audio.SpectrogramData
 import io.github.samgum.aegisub.domain.audio.Waveform
+import io.github.samgum.aegisub.domain.automation.AutomationEngine
 import io.github.samgum.aegisub.domain.edit.DeleteEmpty
+import io.github.samgum.aegisub.domain.edit.ExportPipeline
+import io.github.samgum.aegisub.domain.edit.FindReplaceStepper
 import io.github.samgum.aegisub.domain.edit.FontsCollectorAnalyzer
 import io.github.samgum.aegisub.domain.edit.FramerateConverter
+import io.github.samgum.aegisub.domain.edit.FullTimingProcessor
 import io.github.samgum.aegisub.domain.edit.KanjiTimer
 import io.github.samgum.aegisub.domain.edit.KaraokeGenerator
 import io.github.samgum.aegisub.domain.edit.KaraokeMode
 import io.github.samgum.aegisub.domain.edit.KeyframesIo
 import io.github.samgum.aegisub.domain.edit.LineOps
 import io.github.samgum.aegisub.domain.edit.PasteOver
+import io.github.samgum.aegisub.domain.edit.PasteOverFields
 import io.github.samgum.aegisub.domain.edit.ResolutionResampler
 import io.github.samgum.aegisub.domain.edit.ScriptInfoOps
 import io.github.samgum.aegisub.domain.edit.SelectLines
@@ -35,16 +40,21 @@ import io.github.samgum.aegisub.domain.edit.ShiftTarget
 import io.github.samgum.aegisub.domain.edit.SortKey
 import io.github.samgum.aegisub.domain.edit.SortLines
 import io.github.samgum.aegisub.domain.edit.SortOrder
+import io.github.samgum.aegisub.domain.edit.SortSelectedLines
 import io.github.samgum.aegisub.domain.edit.StyleReplace
+import io.github.samgum.aegisub.domain.edit.TextImportProcessor
 import io.github.samgum.aegisub.domain.edit.TimePostProcess
 import io.github.samgum.aegisub.domain.edit.TimeShift
+import io.github.samgum.aegisub.domain.edit.TimecodesIo
 import io.github.samgum.aegisub.domain.edit.VisualTags
 import io.github.samgum.aegisub.domain.format.AssFormat
 import io.github.samgum.aegisub.domain.format.SubtitleFormat
 import io.github.samgum.aegisub.domain.format.WriteOptions
+import io.github.samgum.aegisub.domain.model.AssAttachment
 import io.github.samgum.aegisub.domain.model.AssColor
 import io.github.samgum.aegisub.domain.model.AssEvent
 import io.github.samgum.aegisub.domain.model.AssScript
+import io.github.samgum.aegisub.domain.model.AttachmentGroup
 import io.github.samgum.aegisub.domain.model.Margins
 import io.github.samgum.aegisub.domain.preview.ActiveSubtitleResolver
 import io.github.samgum.aegisub.domain.preview.SubtitleRenderInfo
@@ -147,6 +157,9 @@ class WorkspaceViewModel @Inject constructor(
 
     private val _keyframesMs = MutableStateFlow<List<Long>>(emptyList())
     val keyframesMs: StateFlow<List<Long>> = _keyframesMs.asStateFlow()
+
+    private val _timecodesMs = MutableStateFlow<List<Long>>(emptyList())
+    val timecodesMs: StateFlow<List<Long>> = _timecodesMs.asStateFlow()
 
     private val _visualToolMode = MutableStateFlow(VisualToolMode.POSITION)
     val visualToolMode: StateFlow<VisualToolMode> = _visualToolMode.asStateFlow()
@@ -295,10 +308,43 @@ class WorkspaceViewModel @Inject constructor(
     }
 
     fun closeMedia() {
-        player.pause()
+        player.openDummyVideo()
         _hasMedia.value = false
         _waveform.value = null
         _spectrogram.value = null
+    }
+
+    fun openDummyVideo(
+        width: Int,
+        height: Int,
+        fps: Float,
+        durationMs: Long,
+        colorArgb: Int = 0xFF181E29.toInt(),
+        checkerboard: Boolean = true,
+    ) {
+        _hasMedia.value = false
+        _waveform.value = null
+        _spectrogram.value = null
+        player.openDummyVideo(width, height, fps, durationMs, colorArgb, checkerboard)
+        postBanner("已启用 ${width}×$height (${fps}fps) 虚拟视频画布")
+    }
+
+    fun importTimecodesText(content: String) {
+        val parsed = TimecodesIo.parseTimecodesMs(content)
+        if (parsed.isNotEmpty()) {
+            _timecodesMs.value = parsed
+            postBanner("已载入 ${parsed.size} 帧时间码")
+        }
+    }
+
+    fun exportTimecodesText(): String {
+        val existing = _timecodesMs.value
+        if (existing.isNotEmpty()) return TimecodesIo.writeTimecodesV2(existing)
+        val fps = player.state.value.fps.let { if (it > 0f) it.toDouble() else 23.976 }
+        val dur = player.state.value.durationMs.coerceAtLeast(60_000L)
+        val totalFrames = ((dur / 1000.0) * fps).toInt().coerceIn(1, 100_000)
+        val generated = List(totalFrames) { f -> ((f * 1000.0) / fps).toLong() }
+        return TimecodesIo.writeTimecodesV2(generated)
     }
 
     private fun extractAudioAndKeyframes(uri: String) {
@@ -691,6 +737,12 @@ class WorkspaceViewModel @Inject constructor(
         return idxs.mapNotNull { events.getOrNull(it)?.toLine() }.joinToString("\n")
     }
 
+    fun cutSelectedLinesAsAss(): String {
+        val copied = copySelectedLinesAsAss()
+        if (copied.isNotEmpty()) deleteTargetLines()
+        return copied
+    }
+
     fun pasteAssOrTextLines(clipboardText: String) {
         if (clipboardText.isBlank()) return
         session.editEvents { list ->
@@ -708,8 +760,121 @@ class WorkspaceViewModel @Inject constructor(
         }
     }
 
-    fun sortLines(key: SortKey, order: SortOrder) {
-        session.editEvents { SortLines.apply(it, key, order) }
+    fun sortLines(key: SortKey, order: SortOrder, selectedOnly: Boolean = false) {
+        val sel = _selectedIds.value
+        if (selectedOnly && sel.size >= 2) {
+            session.editEvents { SortSelectedLines.apply(it, sel, key, order) }
+            postBanner("已对选中的 ${sel.size} 行原位排序")
+        } else {
+            session.editEvents { SortLines.apply(it, key, order) }
+        }
+    }
+
+    /** 仿桌面 `Timing -> Shift Selection so Active Line Starts at Video Frame` (`time/frame/current`)。 */
+    fun shiftSelectionToVideoTime() {
+        val act = activeEvent() ?: return
+        val delta = player.state.value.positionMs - act.start.millis
+        val hasSel = _selectedIds.value.isNotEmpty()
+        shiftTimes(delta, ShiftTarget.BOTH, onlyAfterActive = false, selectedOnly = hasSel)
+        postBanner("已按当前视频时间平移对齐")
+    }
+
+    /** 仿桌面 `Timing -> Snap to Scene`：将当前行起止吸附到最近关键帧。 */
+    fun snapActiveToScene() {
+        val ev = activeEvent() ?: return
+        val kfs = _keyframesMs.value
+        if (kfs.isEmpty()) {
+            postBanner("当前未载入关键帧")
+            return
+        }
+        val s = KeyframesIo.snapToNearest(ev.start.millis, kfs, 400L)
+        val e = KeyframesIo.snapToNearest(ev.end.millis, kfs, 400L).coerceAtLeast(s + 40L)
+        updateEventTimes(ev.id, s, e)
+        postBanner("已吸附到最近场景关键帧")
+    }
+
+    // ---------------- Automation 4 自动化与 ASS 内嵌附件 ----------------
+
+    fun runAutomationMacro(macro: AutomationEngine.BuiltinMacro) {
+        val s = session.script.value ?: return
+        val sel = _selectedIds.value
+        when (macro) {
+            AutomationEngine.BuiltinMacro.KARAOKE_TEMPLATER -> {
+                val res = AutomationEngine.applyKaraokeTemplater(s)
+                if (res.templateCount == 0) {
+                    postBanner("未找到 Comment: template ... 卡拉OK模板行")
+                } else {
+                    session.editScript { res.script }
+                    postBanner("卡拉OK模板已展开：${res.templateCount} 条模板 → 生成 ${res.generatedLines} 条 fx 特效行")
+                }
+            }
+            AutomationEngine.BuiltinMacro.CLEAN_TAGS -> {
+                val (updated, count) = AutomationEngine.cleanTags(s.events, sel)
+                if (count > 0) session.editEvents { updated }
+                postBanner("清理整理标签：共优化 $count 行")
+            }
+            AutomationEngine.BuiltinMacro.STRIP_TAGS -> {
+                val (updated, count) = AutomationEngine.stripTags(s.events, sel)
+                if (count > 0) session.editEvents { updated }
+                postBanner("已剥离 $count 行的覆盖标签")
+            }
+            AutomationEngine.BuiltinMacro.ADD_EDGE_BLUR -> {
+                val (updated, count) = AutomationEngine.addEdgeBlur(s.events, sel)
+                if (count > 0) session.editEvents { updated }
+                postBanner("已为 $count 行添加 {\\be1} 边缘柔化")
+            }
+            AutomationEngine.BuiltinMacro.MAKE_FULLWIDTH -> {
+                val (updated, count) = AutomationEngine.makeFullwidth(s.events, sel)
+                if (count > 0) session.editEvents { updated }
+                postBanner("半角转全角：已转换 $count 行")
+            }
+            AutomationEngine.BuiltinMacro.KARAOKE_AUTO_LEADIN -> {
+                val (updated, count) = AutomationEngine.autoKaraokeLeadIn(s.events, sel)
+                if (count > 0) session.editEvents { updated }
+                postBanner("卡拉OK自动前导：已衔接 $count 处行间间隙")
+            }
+            AutomationEngine.BuiltinMacro.SELECT_OVERLAPS -> {
+                val overlaps = AutomationEngine.selectOverlaps(s.events, sel)
+                _selectedIds.value = overlaps
+                overlaps.firstOrNull()?.let { selectEvent(it, seekMedia = false) }
+                postBanner(if (overlaps.isEmpty()) "未发现时间重叠行" else "已自动选中 ${overlaps.size} 条时间重叠行")
+            }
+        }
+    }
+
+    fun insertKaraokeTemplateStarter() {
+        val cur = activeEvent()
+        val styleName = cur?.style ?: session.script.value?.styles?.firstOrNull()?.name ?: "Default"
+        session.editEvents { list ->
+            val nextId = (list.maxOfOrNull { it.id } ?: -1L) + 1L
+            val tpl = AssEvent(
+                id = nextId,
+                comment = true,
+                style = styleName,
+                effect = "template syl",
+                text = "{\\pos(\$x,\$y)\\fad(80,120)\\t(\$start,\$end,\\fscx120\\fscy120)\\t(\$end,!\$end+100!,\\fscx100\\fscy100)}",
+            )
+            val idx = list.indexOfFirst { it.id == _activeEventId.value }.coerceAtLeast(0)
+            list.toMutableList().apply { add(idx.coerceAtMost(size), tpl) }
+        }
+        postBanner("已插入 template syl 卡拉OK模板行")
+    }
+
+    fun addAttachment(fileName: String, group: AttachmentGroup, bytes: ByteArray) {
+        if (bytes.isEmpty()) return
+        val att = AssAttachment.fromBytes(fileName, group, bytes)
+        session.editScript { cur ->
+            val filtered = cur.attachments.filterNot { it.fileName.equals(att.fileName, ignoreCase = true) }
+            cur.withAttachments(filtered + att)
+        }
+        postBanner("已内嵌附件：${att.displayFileName}")
+    }
+
+    fun removeAttachment(fileName: String) {
+        session.editScript { cur ->
+            cur.withAttachments(cur.attachments.filterNot { it.fileName == fileName })
+        }
+        postBanner("已移除附件")
     }
 
     // ---------------- SGMY 特色工具全接入 ----------------
@@ -790,13 +955,52 @@ class WorkspaceViewModel @Inject constructor(
 
     // ---------------- 桌面经典批量与工程工具 ----------------
 
-    fun replaceAll(query: String, replacement: String, useRegex: Boolean, ignoreCase: Boolean, selectedOnly: Boolean = false) {
+    fun findNextMatch(
+        query: String,
+        field: FindReplaceStepper.TargetField,
+        useRegex: Boolean,
+        ignoreCase: Boolean,
+    ): Boolean {
+        val events = session.script.value?.events ?: return false
+        val hitId = FindReplaceStepper.findNextEventId(events, _activeEventId.value, query, field, useRegex, ignoreCase)
+        return if (hitId != null) {
+            selectEvent(hitId)
+            true
+        } else {
+            postBanner("未找到匹配项")
+            false
+        }
+    }
+
+    fun replaceCurrentAndFindNext(
+        query: String,
+        replacement: String,
+        field: FindReplaceStepper.TargetField,
+        useRegex: Boolean,
+        ignoreCase: Boolean,
+    ) {
+        val cur = activeEvent() ?: return
+        val replaced = FindReplaceStepper.replaceInEvent(cur, query, replacement, field, useRegex, ignoreCase)
+        if (replaced != cur) {
+            session.editEvent(cur.id) { replaced }
+        }
+        findNextMatch(query, field, useRegex, ignoreCase)
+    }
+
+    fun replaceAll(
+        query: String,
+        replacement: String,
+        useRegex: Boolean,
+        ignoreCase: Boolean,
+        selectedOnly: Boolean = false,
+        field: FindReplaceStepper.TargetField = FindReplaceStepper.TargetField.TEXT,
+    ) {
         val sel = _selectedIds.value
         session.editAllEvents { e ->
             if (selectedOnly && sel.isNotEmpty() && e.id !in sel) e
-            else e.copy(text = FindReplace.replaceAll(e.text, query, replacement, useRegex, ignoreCase))
+            else FindReplaceStepper.replaceInEvent(e, query, replacement, field, useRegex, ignoreCase)
         }
-        postBanner("已完成查找替换")
+        postBanner("已完成全部替换")
     }
 
     fun shiftTimes(deltaMs: Long, target: ShiftTarget, onlyAfterActive: Boolean, selectedOnly: Boolean) {
@@ -817,6 +1021,14 @@ class WorkspaceViewModel @Inject constructor(
             TimePostProcess.apply(list, leadInMs, leadOutMs, minGapMs)
         }
         postBanner("时间后处理已应用")
+    }
+
+    fun applyFullTimingProcessor(config: FullTimingProcessor.Config) {
+        val kfs = _keyframesMs.value
+        session.editEvents { list ->
+            FullTimingProcessor.process(list, config.copy(keyframesMs = kfs))
+        }
+        postBanner("时间后处理器已执行完成")
     }
 
     fun resampleResolution(toW: Int, toH: Int, scalePos: Boolean, scaleBorders: Boolean) {
@@ -876,15 +1088,33 @@ class WorkspaceViewModel @Inject constructor(
         }
     }
 
-    fun pasteOver(text: String) {
+    fun pasteOver(text: String, selectedFields: Set<PasteOverFields.Field> = PasteOverFields.PRESET_TEXT_ONLY) {
         val events = session.script.value?.events ?: return
         val ids = if (_selectedIds.value.isNotEmpty()) {
             events.filter { it.id in _selectedIds.value }.map { it.id }
         } else {
-            events.map { it.id }
+            val actIdx = events.indexOfFirst { it.id == _activeEventId.value }.coerceAtLeast(0)
+            events.drop(actIdx).map { it.id }
         }
-        val lines = text.replace("\r\n", "\n").split("\n")
-        session.editEvents { PasteOver.apply(it, ids, lines) }
+        val lines = text.replace("\r\n", "\n").split("\n").filter { it.isNotEmpty() }
+        if (selectedFields == PasteOverFields.PRESET_TEXT_ONLY && lines.none { it.startsWith("Dialogue:", true) || it.startsWith("Comment:", true) }) {
+            session.editEvents { PasteOver.apply(it, ids, lines) }
+        } else {
+            session.editEvents { PasteOverFields.apply(it, ids, lines, selectedFields) }
+        }
+        postBanner("已完成选择字段粘贴覆盖")
+    }
+
+    fun applyTextImportActorParse(options: TextImportProcessor.Options) {
+        val raw = session.script.value?.events?.joinToString("\n") {
+            if (it.comment) "${options.commentStarter} ${it.text}" else it.text
+        }.orEmpty()
+        if (raw.isBlank()) return
+        val reparsed = TextImportProcessor.parsePlainScript(raw, options)
+        if (reparsed.isNotEmpty()) {
+            session.editEvents { reparsed }
+            postBanner("已按说话人分隔符解析 ${reparsed.size} 行台词")
+        }
     }
 
     fun setTranslation(eventId: Long, original: String, translation: String) {
@@ -927,6 +1157,16 @@ class WorkspaceViewModel @Inject constructor(
         val s = session.script.value ?: return ""
         val precision = settingsRepo.settings.first().exportPrecision
         return format.write(s, WriteOptions(timePrecision = precision))
+    }
+
+    suspend fun exportBytesWithPipeline(
+        format: SubtitleFormat,
+        filters: ExportPipeline.FilterOptions,
+        charset: ExportPipeline.ExportCharset,
+    ): ByteArray {
+        val s = session.script.value ?: return ByteArray(0)
+        val precision = settingsRepo.settings.first().exportPrecision
+        return ExportPipeline.runExport(s, format, WriteOptions(timePrecision = precision), filters, charset)
     }
 
     fun saveAiSettings(
