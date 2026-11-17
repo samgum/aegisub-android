@@ -63,32 +63,36 @@ object TtmlFormat : SubtitleFormat {
             }
             val amount = numStr.toDoubleOrNull() ?: return -1L
             if (!amount.isFinite() || amount < 0.0) return -1L
-            return (amount * scale).roundToLong()
+            val msDouble = amount * scale
+            if (!msDouble.isFinite() || msDouble < 0.0 || msDouble > 35_999_990.0) return -1L
+            return msDouble.roundToLong()
         }
 
         val normalized = value.replace(',', '.')
         val parts = normalized.split(':')
-        return when (parts.size) {
+        val totalMsDouble = when (parts.size) {
             1 -> {
                 val sec = parts[0].toDoubleOrNull() ?: return -1L
                 if (!sec.isFinite() || sec < 0.0) return -1L
-                (sec * 1_000.0).roundToLong()
+                sec * 1_000.0
             }
             2 -> {
                 val min = parts[0].toLongOrNull() ?: return -1L
                 val sec = parts[1].toDoubleOrNull() ?: return -1L
-                if (min < 0 || sec < 0.0 || sec >= 60.0) return -1L
-                ((min * 60.0 + sec) * 1_000.0).roundToLong()
+                if (min < 0 || !sec.isFinite() || sec < 0.0 || sec >= 60.0) return -1L
+                (min * 60.0 + sec) * 1_000.0
             }
             3 -> {
                 val hr = parts[0].toLongOrNull() ?: return -1L
                 val min = parts[1].toLongOrNull() ?: return -1L
                 val sec = parts[2].toDoubleOrNull() ?: return -1L
-                if (hr < 0 || min !in 0..59 || sec < 0.0 || sec >= 60.0) return -1L
-                ((hr * 3_600.0 + min * 60.0 + sec) * 1_000.0).roundToLong()
+                if (hr < 0 || min !in 0..59 || !sec.isFinite() || sec < 0.0 || sec >= 60.0) return -1L
+                (hr * 3_600.0 + min * 60.0 + sec) * 1_000.0
             }
-            else -> -1L
+            else -> return -1L
         }
+        if (!totalMsDouble.isFinite() || totalMsDouble < 0.0 || totalMsDouble > 35_999_990.0) return -1L
+        return totalMsDouble.roundToLong()
     }
 
     private fun localName(node: Node): String {

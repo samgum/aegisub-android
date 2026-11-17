@@ -4,8 +4,11 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -24,11 +27,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -52,12 +56,21 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -80,14 +93,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 统一自适应字幕工程工作台（Aegisub SGMY Studio Workspace）：
- * 单一屏幕同时集成视频舞台、8 工具可视化打字、可缩放音频打轴、语法高亮编辑框、高密度多列网格，
- * 并针对 **5 大硬件形态姿态** 自动切换最佳工程布局：
- * - [WorkspacePosture.DESKTOP_THREE_ZONE]：平板 / 折叠全展 / DeX → 1:1 复刻桌面 Aegisub 经典上双区 + 下全宽多列网格（带可拖拽分割条）
- * - [WorkspacePosture.BOOK_DUAL_PANE]：折叠屏书本/垂直折痕 → 左页媒体与波形打轴 + 铰链安全留白 + 右页编辑框与字幕网格
- * - [WorkspacePosture.TABLETOP]：折叠屏半开悬停/水平折痕 → 上半屏纯净视频舞台 + 折痕留白 + 下半屏触控音频打轴与网格控制台
- * - [WorkspacePosture.LANDSCAPE_SPLIT]：手机横屏 / 小平板 → 左右可调比例双栏工作台
- * - [WorkspacePosture.PHONE_COMPACT]：手机竖屏 → 可切换紧凑上舞台（影音同屏/专注打轴/专注画面/纯文本）+ 编辑框 + 列表 + 拇指底栏
+ * 统一自适应字幕工程工作台：全面支持手机单手触控、平板/DeX 键鼠协同与折叠屏悬停/双页姿态。
  *
  * @author 伤感咩吖
  */
@@ -121,6 +127,7 @@ fun WorkspaceScreen(
     var activeDialog by remember { mutableStateOf<WorkspaceDialogType?>(null) }
     var visualOverlayEnabled by remember { mutableStateOf(false) }
     var pendingExportFormat by remember { mutableStateOf<SubtitleFormat?>(null) }
+    var isTextInputFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(statusBanner) {
         val msg = statusBanner ?: return@LaunchedEffect
@@ -128,7 +135,6 @@ fun WorkspaceScreen(
         viewModel.clearBanner()
     }
 
-    // SAF 媒体选择器（视频或纯音频皆可）
     val pickMediaLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching {
@@ -138,7 +144,6 @@ fun WorkspaceScreen(
         }
     }
 
-    // SAF 关键帧导入选择器
     val importKeyframesLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             scope.launch {
@@ -150,7 +155,6 @@ fun WorkspaceScreen(
         }
     }
 
-    // SAF 关键帧导出选择器
     val exportKeyframesLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) {
             val content = viewModel.exportKeyframesText()
@@ -161,7 +165,6 @@ fun WorkspaceScreen(
         }
     }
 
-    // SAF 字幕格式转换导出器
     val exportSubtitleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
         val fmt = pendingExportFormat
         pendingExportFormat = null
@@ -171,7 +174,7 @@ fun WorkspaceScreen(
                 withContext(Dispatchers.IO) {
                     context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(out) }
                 }
-                viewModel.postBanner("已导出为 ${fmt.name} 格式")
+                viewModel.postBanner("已导出为 ${fmt.name.uppercase()} 格式")
             }
         }
     }
@@ -200,7 +203,7 @@ fun WorkspaceScreen(
                 val txt = viewModel.copySelectedLinesAsAss()
                 if (txt.isNotEmpty()) {
                     clipboard.setText(AnnotatedString(txt))
-                    viewModel.postBanner("已复制字幕行到剪贴板")
+                    viewModel.postBanner("已复制字幕行")
                 }
             }
 
@@ -211,6 +214,48 @@ fun WorkspaceScreen(
                 }
             }
 
+            fun dispatchHotkey(action: HotkeyAction) {
+                when (action) {
+                    HotkeyAction.UNDO -> viewModel.undo()
+                    HotkeyAction.REDO -> viewModel.redo()
+                    HotkeyAction.SAVE -> viewModel.takeSnapshot("手动保存")
+                    HotkeyAction.EXPORT -> activeDialog = WorkspaceDialogType.EXPORT
+                    HotkeyAction.FIND_REPLACE -> activeDialog = WorkspaceDialogType.FIND_REPLACE
+                    HotkeyAction.DUPLICATE_LINE -> viewModel.duplicateTargetLines()
+                    HotkeyAction.DELETE_LINE -> viewModel.deleteTargetLines()
+                    HotkeyAction.SPLIT_LINE -> viewModel.splitActiveLine(atVideoTime = state.hasMedia)
+                    HotkeyAction.JOIN_KEEP_FIRST -> viewModel.joinTargetLines(WorkspaceViewModel.JoinMode.KEEP_FIRST)
+                    HotkeyAction.JOIN_CONCAT -> viewModel.joinTargetLines(WorkspaceViewModel.JoinMode.CONCAT)
+                    HotkeyAction.JOIN_KARAOKE -> viewModel.joinTargetLines(WorkspaceViewModel.JoinMode.AS_KARAOKE)
+                    HotkeyAction.MOVE_LINE_UP -> viewModel.moveTargetLinesUp()
+                    HotkeyAction.MOVE_LINE_DOWN -> viewModel.moveTargetLinesDown()
+                    HotkeyAction.INSERT_BEFORE -> viewModel.insertLineBefore(false)
+                    HotkeyAction.INSERT_AFTER -> viewModel.insertLineAfter(false)
+                    HotkeyAction.COPY_LINES -> copyLinesToClipboard()
+                    HotkeyAction.PASTE_LINES -> pasteLinesFromClipboard()
+                    HotkeyAction.SELECT_ALL -> viewModel.selectAll()
+                    HotkeyAction.SELECT_PREV -> viewModel.selectPrevEvent()
+                    HotkeyAction.SELECT_NEXT -> viewModel.selectNextEvent()
+                    HotkeyAction.COMMIT_AND_NEXT -> viewModel.commitAndAdvance()
+                    HotkeyAction.PLAY_PAUSE -> viewModel.playPause()
+                    HotkeyAction.PLAY_LINE -> viewModel.playActiveLine()
+                    HotkeyAction.SEEK_BACK -> viewModel.seekRelative(-5_000L)
+                    HotkeyAction.SEEK_FORWARD -> viewModel.seekRelative(5_000L)
+                    HotkeyAction.FRAME_BACK -> viewModel.frameStepBack()
+                    HotkeyAction.FRAME_FORWARD -> viewModel.frameStepForward()
+                    HotkeyAction.SPEED_DOWN -> viewModel.adjustSpeed(-0.25f)
+                    HotkeyAction.SPEED_UP -> viewModel.adjustSpeed(0.25f)
+                    HotkeyAction.SPEED_RESET -> viewModel.setSpeed(1.0f)
+                    HotkeyAction.SET_START_TO_POS -> viewModel.setStartToVideo()
+                    HotkeyAction.SET_END_TO_POS -> viewModel.setEndToVideo()
+                    HotkeyAction.ADD_LEAD_IN -> viewModel.addLeadIn()
+                    HotkeyAction.ADD_LEAD_OUT -> viewModel.addLeadOut()
+                    HotkeyAction.FIX_COMMON_ERRORS -> activeDialog = WorkspaceDialogType.SGMY_FIX_COMMON_ERRORS
+                    HotkeyAction.LYRIC_SCROLL -> activeDialog = WorkspaceDialogType.SGMY_LYRIC_SCROLL
+                    HotkeyAction.CYCLE_TAG_HIDING -> viewModel.cycleTagDisplayMode()
+                }
+            }
+
             Scaffold(
                 snackbarHost = { SnackbarHost(snackbarHostState) },
                 modifier = Modifier
@@ -218,50 +263,49 @@ fun WorkspaceScreen(
                     .statusBarsPadding()
                     .navigationBarsPadding()
                     .onPreviewKeyEvent { keyEv ->
-                        val action = hotkeys.match(keyEv) ?: return@onPreviewKeyEvent false
-                        when (action) {
-                            HotkeyAction.UNDO -> viewModel.undo()
-                            HotkeyAction.REDO -> viewModel.redo()
-                            HotkeyAction.SAVE -> viewModel.takeSnapshot("Ctrl+S 快照")
-                            HotkeyAction.EXPORT -> activeDialog = WorkspaceDialogType.EXPORT
-                            HotkeyAction.FIND_REPLACE -> activeDialog = WorkspaceDialogType.FIND_REPLACE
-                            HotkeyAction.DUPLICATE_LINE -> viewModel.duplicateTargetLines()
-                            HotkeyAction.DELETE_LINE -> viewModel.deleteTargetLines()
-                            HotkeyAction.SPLIT_LINE -> viewModel.splitActiveLine(atVideoTime = state.hasMedia)
-                            HotkeyAction.JOIN_KEEP_FIRST -> viewModel.joinTargetLines(WorkspaceViewModel.JoinMode.KEEP_FIRST)
-                            HotkeyAction.JOIN_CONCAT -> viewModel.joinTargetLines(WorkspaceViewModel.JoinMode.CONCAT)
-                            HotkeyAction.JOIN_KARAOKE -> viewModel.joinTargetLines(WorkspaceViewModel.JoinMode.AS_KARAOKE)
-                            HotkeyAction.MOVE_LINE_UP -> viewModel.moveTargetLinesUp()
-                            HotkeyAction.MOVE_LINE_DOWN -> viewModel.moveTargetLinesDown()
-                            HotkeyAction.INSERT_BEFORE -> viewModel.insertLineBefore(false)
-                            HotkeyAction.INSERT_AFTER -> viewModel.insertLineAfter(false)
-                            HotkeyAction.COPY_LINES -> copyLinesToClipboard()
-                            HotkeyAction.PASTE_LINES -> pasteLinesFromClipboard()
-                            HotkeyAction.SELECT_ALL -> viewModel.selectAll()
-                            HotkeyAction.SELECT_PREV -> viewModel.selectPrevEvent()
-                            HotkeyAction.SELECT_NEXT -> viewModel.selectNextEvent()
-                            HotkeyAction.COMMIT_AND_NEXT -> viewModel.commitAndAdvance()
-                            HotkeyAction.PLAY_PAUSE -> viewModel.playPause()
-                            HotkeyAction.PLAY_LINE -> viewModel.playActiveLine()
-                            HotkeyAction.SEEK_BACK -> viewModel.seekRelative(-5_000L)
-                            HotkeyAction.SEEK_FORWARD -> viewModel.seekRelative(5_000L)
-                            HotkeyAction.FRAME_BACK -> viewModel.frameStepBack()
-                            HotkeyAction.FRAME_FORWARD -> viewModel.frameStepForward()
-                            HotkeyAction.SPEED_DOWN -> viewModel.adjustSpeed(-0.25f)
-                            HotkeyAction.SPEED_UP -> viewModel.adjustSpeed(0.25f)
-                            HotkeyAction.SPEED_RESET -> viewModel.setSpeed(1.0f)
-                            HotkeyAction.SET_START_TO_POS -> viewModel.setStartToVideo()
-                            HotkeyAction.SET_END_TO_POS -> viewModel.setEndToVideo()
-                            HotkeyAction.ADD_LEAD_IN -> viewModel.addLeadIn()
-                            HotkeyAction.ADD_LEAD_OUT -> viewModel.addLeadOut()
-                            HotkeyAction.FIX_COMMON_ERRORS -> activeDialog = WorkspaceDialogType.SGMY_FIX_COMMON_ERRORS
-                            HotkeyAction.LYRIC_SCROLL -> activeDialog = WorkspaceDialogType.SGMY_LYRIC_SCROLL
-                            HotkeyAction.CYCLE_TAG_HIDING -> viewModel.cycleTagDisplayMode()
+                        if (keyEv.type != KeyEventType.KeyDown || activeDialog != null) return@onPreviewKeyEvent false
+
+                        // 当用户正在编辑框打字时，仅响应带 Ctrl / Alt 修饰键的全局热键，绝不吞噬普通字母、空格与方向键！
+                        if (isTextInputFocused) {
+                            if (!keyEv.isCtrlPressed && !keyEv.isAltPressed) return@onPreviewKeyEvent false
+                            val action = hotkeys.match(keyEv) ?: return@onPreviewKeyEvent false
+                            dispatchHotkey(action)
+                            return@onPreviewKeyEvent true
                         }
-                        true
+
+                        // 焦点在网格/视频/波形区时：支持全部单键打轴快捷键 + 标准桌面方向键/Delete/Esc/Ctrl+C/V/A
+                        val matched = hotkeys.match(keyEv)
+                        if (matched != null) {
+                            dispatchHotkey(matched)
+                            return@onPreviewKeyEvent true
+                        }
+
+                        when {
+                            keyEv.key == Key.DirectionUp && !keyEv.isAltPressed -> {
+                                viewModel.selectPrevEvent(); true
+                            }
+                            keyEv.key == Key.DirectionDown && !keyEv.isAltPressed -> {
+                                viewModel.selectNextEvent(); true
+                            }
+                            keyEv.key == Key.Delete || keyEv.key == Key.Backspace -> {
+                                viewModel.deleteTargetLines(); true
+                            }
+                            keyEv.key == Key.Escape && state.selectedIds.isNotEmpty() -> {
+                                viewModel.clearSelection(); true
+                            }
+                            keyEv.isCtrlPressed && keyEv.key == Key.A -> {
+                                viewModel.selectAll(); true
+                            }
+                            keyEv.isCtrlPressed && keyEv.key == Key.C -> {
+                                copyLinesToClipboard(); true
+                            }
+                            keyEv.isCtrlPressed && keyEv.key == Key.V -> {
+                                pasteLinesFromClipboard(); true
+                            }
+                            else -> false
+                        }
                     },
             ) { innerPadding ->
-                // 封装四大核心子视图，确保在 5 种姿态之间切换时状态平滑延续
                 val renderTopDesktopBar: @Composable () -> Unit = {
                     DesktopMenuAndToolbar(
                         projectName = state.projectName,
@@ -284,7 +328,7 @@ fun WorkspaceScreen(
                         onCycleTagMode = viewModel::cycleTagDisplayMode,
                         onSetDisplayPreset = viewModel::setDisplayPreset,
                         onOpenDialog = { activeDialog = it },
-                        onQuickSnapshot = { viewModel.takeSnapshot("手动保存点") },
+                        onQuickSnapshot = { viewModel.takeSnapshot("手动保存") },
                         onInsertBefore = { viewModel.insertLineBefore(false) },
                         onInsertAfter = { viewModel.insertLineAfter(false) },
                         onDuplicateLines = viewModel::duplicateTargetLines,
@@ -320,7 +364,7 @@ fun WorkspaceScreen(
                     )
                 }
 
-                val renderVideoStage: @Composable (Modifier, Boolean) -> Unit = { mod, compact ->
+                val renderVideoStage: @Composable (Modifier, Boolean, Boolean) -> Unit = { mod, compact, showStrip ->
                     VideoStagePane(
                         script = state.script,
                         activeEvent = activeEvent,
@@ -352,12 +396,13 @@ fun WorkspaceScreen(
                             viewModel.clearEventMove()
                             viewModel.clearEventClips()
                         },
+                        showTypesettingStrip = showStrip,
                         compactControls = compact,
                         modifier = mod,
                     )
                 }
 
-                val renderAudioDeck: @Composable (Modifier, androidx.compose.ui.unit.Dp) -> Unit = { mod, h ->
+                val renderAudioDeck: @Composable (Modifier, Dp) -> Unit = { mod, h ->
                     AudioTimingDeck(
                         waveform = waveform,
                         spectrogram = spectrogram,
@@ -406,6 +451,7 @@ fun WorkspaceScreen(
                         onSetInlineColor = viewModel::setInlineColor,
                         onCommitAndNext = viewModel::commitAndAdvance,
                         onOpenAiAnalysis = { activeDialog = WorkspaceDialogType.SGMY_AI_ANALYSIS },
+                        onInputFocusChanged = { isTextInputFocused = it },
                         modifier = mod,
                     )
                 }
@@ -482,13 +528,15 @@ fun WorkspaceScreen(
                         )
 
                         WorkspacePosture.PHONE_COMPACT -> PhoneCompactStudioLayout(
+                            hasMedia = state.hasMedia,
                             topBar = renderCompactTopBar,
                             videoStage = renderVideoStage,
                             audioDeck = renderAudioDeck,
                             editBox = renderEditBox,
                             subtitleGrid = renderGrid,
+                            onPickMedia = { pickMediaLauncher.launch(arrayOf("video/*", "audio/*")) },
+                            onSetVisualOverlay = { visualOverlayEnabled = it },
                             onOpenStyles = { onOpenStyles(viewModel.projectId) },
-                            onOpenFixErrors = { activeDialog = WorkspaceDialogType.SGMY_FIX_COMMON_ERRORS },
                             onOpenExport = { activeDialog = WorkspaceDialogType.EXPORT },
                         )
                     }
@@ -506,7 +554,7 @@ fun WorkspaceScreen(
                     onSwitchDialog = { activeDialog = it },
                     onExportFormatPicked = { fmt ->
                         pendingExportFormat = fmt
-                        val ext = fmt.extensions.firstOrNull() ?: "ass"
+                        val ext = (fmt.extensions.firstOrNull() ?: ".ass").trimStart('.')
                         exportSubtitleLauncher.launch("${state.projectName}.$ext")
                     },
                 )
@@ -516,25 +564,19 @@ fun WorkspaceScreen(
 }
 
 // ============================================================================
-// 5 大硬件姿态专属布局实现
+// 5 种设备形态专属布局
 // ============================================================================
 
-/**
- * 1. 大屏平板 / 折叠全展 / DeX 桌面模式：1:1 复刻桌面 `samgum/Aegisub` 三区+可拖拽分割器布局！
- * - 上半区：左侧视频舞台 ↔ 可拖拽垂直分割条 ↔ 右侧音频波形 + 字幕编辑框
- * - 可拖拽水平分割条
- * - 下半区：全宽 9 列专业字幕网格
- */
 @Composable
 private fun DesktopThreeZoneLayout(
     displayPreset: WorkspaceDisplayPreset,
     topBar: @Composable () -> Unit,
-    videoStage: @Composable (Modifier, Boolean) -> Unit,
-    audioDeck: @Composable (Modifier, androidx.compose.ui.unit.Dp) -> Unit,
+    videoStage: @Composable (Modifier, Boolean, Boolean) -> Unit,
+    audioDeck: @Composable (Modifier, Dp) -> Unit,
     editBox: @Composable (Modifier, Boolean) -> Unit,
     subtitleGrid: @Composable (Modifier, Boolean) -> Unit,
 ) {
-    var topHeightFraction by remember { mutableFloatStateOf(0.54f) }
+    var topHeightFraction by remember { mutableFloatStateOf(0.52f) }
     var leftWidthFraction by remember { mutableFloatStateOf(0.45f) }
     val density = LocalDensity.current
 
@@ -554,7 +596,7 @@ private fun DesktopThreeZoneLayout(
                         when (displayPreset) {
                             WorkspaceDisplayPreset.FULL -> {
                                 val leftW = totalW * leftWidthFraction
-                                videoStage(Modifier.width(leftW).fillMaxHeight(), false)
+                                videoStage(Modifier.width(leftW).fillMaxHeight(), false, true)
                                 VerticalDragSplitter { dx ->
                                     leftWidthFraction = (leftWidthFraction + dx / totalWPx).coerceIn(0.25f, 0.72f)
                                 }
@@ -564,7 +606,7 @@ private fun DesktopThreeZoneLayout(
                                         .fillMaxHeight()
                                         .verticalScroll(rememberScrollState()),
                                 ) {
-                                    audioDeck(Modifier.fillMaxWidth(), 132.dp)
+                                    audioDeck(Modifier.fillMaxWidth(), 130.dp)
                                     HorizontalDivider()
                                     editBox(Modifier.fillMaxWidth(), false)
                                 }
@@ -572,7 +614,7 @@ private fun DesktopThreeZoneLayout(
 
                             WorkspaceDisplayPreset.VIDEO_SUBS -> {
                                 val leftW = totalW * leftWidthFraction
-                                videoStage(Modifier.width(leftW).fillMaxHeight(), false)
+                                videoStage(Modifier.width(leftW).fillMaxHeight(), false, true)
                                 VerticalDragSplitter { dx ->
                                     leftWidthFraction = (leftWidthFraction + dx / totalWPx).coerceIn(0.28f, 0.75f)
                                 }
@@ -583,7 +625,7 @@ private fun DesktopThreeZoneLayout(
 
                             WorkspaceDisplayPreset.AUDIO_SUBS -> {
                                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                                    audioDeck(Modifier.fillMaxWidth(), 150.dp)
+                                    audioDeck(Modifier.fillMaxWidth(), 148.dp)
                                     HorizontalDivider()
                                     editBox(Modifier.fillMaxWidth(), false)
                                 }
@@ -607,18 +649,12 @@ private fun DesktopThreeZoneLayout(
     }
 }
 
-/**
- * 2. 折叠屏书本半开 / 双屏垂直铰链姿态 (Book Posture)：
- * - 左页：完整视频预览与可视化打字舞台 + 下方音频波形/卡拉OK打轴台
- * - 中间：精确避让物理折痕铰链（`hingeThicknessDp`）
- * - 右页：完整桌面菜单工具栏 + 语法高亮编辑框 + 字幕网格
- */
 @Composable
 private fun FoldableBookDualPaneLayout(
     adaptive: AdaptiveWindowState,
     topBar: @Composable () -> Unit,
-    videoStage: @Composable (Modifier, Boolean) -> Unit,
-    audioDeck: @Composable (Modifier, androidx.compose.ui.unit.Dp) -> Unit,
+    videoStage: @Composable (Modifier, Boolean, Boolean) -> Unit,
+    audioDeck: @Composable (Modifier, Dp) -> Unit,
     editBox: @Composable (Modifier, Boolean) -> Unit,
     subtitleGrid: @Composable (Modifier, Boolean) -> Unit,
 ) {
@@ -626,14 +662,12 @@ private fun FoldableBookDualPaneLayout(
     val rightWide = (adaptive.widthDp.dp - leftW - adaptive.hingeThicknessDp) >= 520.dp
 
     Row(Modifier.fillMaxSize()) {
-        // 左书页：沉浸影音与打轴页
         Column(Modifier.width(leftW).fillMaxHeight()) {
-            videoStage(Modifier.weight(1f).fillMaxWidth(), true)
+            videoStage(Modifier.weight(1f).fillMaxWidth(), true, true)
             HorizontalDivider()
-            audioDeck(Modifier.fillMaxWidth(), 144.dp)
+            audioDeck(Modifier.fillMaxWidth(), 140.dp)
         }
 
-        // 物理折痕避让区
         Box(
             Modifier
                 .width(adaptive.hingeThicknessDp.coerceAtLeast(8.dp))
@@ -641,7 +675,6 @@ private fun FoldableBookDualPaneLayout(
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         )
 
-        // 右书页：文本编辑与网格控制台
         Column(Modifier.weight(1f).fillMaxHeight()) {
             topBar()
             editBox(Modifier.fillMaxWidth(), true)
@@ -651,29 +684,21 @@ private fun FoldableBookDualPaneLayout(
     }
 }
 
-/**
- * 3. 折叠屏水平半折悬停姿态 (Tabletop / Laptop Posture)：
- * - 折痕上方屏幕立起：100% 纯净无遮挡视频舞台（含可视化打字）
- * - 折痕安全留白条
- * - 折痕下方平放桌面：像笔记本键盘面一样的触控打轴+编辑+网格控制台！
- */
 @Composable
 private fun FoldableTabletopLayout(
     adaptive: AdaptiveWindowState,
     topBar: @Composable () -> Unit,
-    videoStage: @Composable (Modifier, Boolean) -> Unit,
-    audioDeck: @Composable (Modifier, androidx.compose.ui.unit.Dp) -> Unit,
+    videoStage: @Composable (Modifier, Boolean, Boolean) -> Unit,
+    audioDeck: @Composable (Modifier, Dp) -> Unit,
     editBox: @Composable (Modifier, Boolean) -> Unit,
     subtitleGrid: @Composable (Modifier, Boolean) -> Unit,
 ) {
     val topH = adaptive.tabletopTopHeightDp ?: (adaptive.heightDp * 0.45f).dp
-    var consoleTab by remember { mutableIntStateOf(0) } // 0 = 音频+编辑, 1 = 字幕网格
+    var consoleTab by remember { mutableIntStateOf(0) }
 
     Column(Modifier.fillMaxSize()) {
-        // 上半屏：立式视频监看舞台
-        videoStage(Modifier.fillMaxWidth().height(topH), true)
+        videoStage(Modifier.fillMaxWidth().height(topH), true, true)
 
-        // 水平铰链避让区
         Box(
             Modifier
                 .fillMaxWidth()
@@ -681,17 +706,16 @@ private fun FoldableTabletopLayout(
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         )
 
-        // 下半屏：桌面触控操作台
         Column(Modifier.weight(1f).fillMaxWidth()) {
             topBar()
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                FilterChip(selected = consoleTab == 0, onClick = { consoleTab = 0 }, label = { Text("打轴波形 + 编辑框") })
-                FilterChip(selected = consoleTab == 1, onClick = { consoleTab = 1 }, label = { Text("字幕列表网格") })
-                FilterChip(selected = consoleTab == 2, onClick = { consoleTab = 2 }, label = { Text("同屏双栏") })
+                FilterChip(selected = consoleTab == 0, onClick = { consoleTab = 0 }, label = { Text("打轴与编辑") })
+                FilterChip(selected = consoleTab == 1, onClick = { consoleTab = 1 }, label = { Text("字幕列表") })
+                FilterChip(selected = consoleTab == 2, onClick = { consoleTab = 2 }, label = { Text("双栏同屏") })
             }
             when (consoleTab) {
                 0 -> Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
@@ -712,15 +736,11 @@ private fun FoldableTabletopLayout(
     }
 }
 
-/**
- * 4. 手机横屏 / 小平板紧凑分栏姿态 (`LANDSCAPE_SPLIT`)：
- * 左栏视频 + 波形打轴，右栏顶栏 + 编辑框 + 字幕列表，支持手指拖拽调节左右栏宽。
- */
 @Composable
 private fun LandscapeSplitLayout(
     topBar: @Composable () -> Unit,
-    videoStage: @Composable (Modifier, Boolean) -> Unit,
-    audioDeck: @Composable (Modifier, androidx.compose.ui.unit.Dp) -> Unit,
+    videoStage: @Composable (Modifier, Boolean, Boolean) -> Unit,
+    audioDeck: @Composable (Modifier, Dp) -> Unit,
     editBox: @Composable (Modifier, Boolean) -> Unit,
     subtitleGrid: @Composable (Modifier, Boolean) -> Unit,
 ) {
@@ -734,7 +754,7 @@ private fun LandscapeSplitLayout(
             val totalWPx = with(density) { totalW.toPx().coerceAtLeast(1f) }
             Row(Modifier.fillMaxSize()) {
                 Column(Modifier.width(totalW * leftFraction).fillMaxHeight()) {
-                    videoStage(Modifier.weight(1f).fillMaxWidth(), true)
+                    videoStage(Modifier.weight(1f).fillMaxWidth(), true, true)
                     HorizontalDivider()
                     audioDeck(Modifier.fillMaxWidth(), 98.dp)
                 }
@@ -752,58 +772,63 @@ private fun LandscapeSplitLayout(
 }
 
 /**
- * 5. 手机竖屏工作台姿态 (`PHONE_COMPACT`)：
- * 彻底告别旧版在两个页面间来回跳转的痛苦！单屏内通过四种顶部舞台微模式自由切换：
- * - `影音同屏`（视频预览 + 精简波形 + 编辑框 + 网格）
- * - `音频快打`（大尺寸可缩放音频波形/卡拉OK + 编辑框 + 网格）
- * - `画面打字`（大尺寸 8 模式可视化打字画布 + 编辑框 + 网格）
- * - `专注文本`（收起媒体舞台，全屏高速校对编辑与网格）
+ * 手机竖屏清爽布局：消除重复切换栏与空黑框，按任务专注度自由切换「字幕 / 打轴 / 排版」。
  */
 @Composable
 private fun PhoneCompactStudioLayout(
+    hasMedia: Boolean,
     topBar: @Composable () -> Unit,
-    videoStage: @Composable (Modifier, Boolean) -> Unit,
-    audioDeck: @Composable (Modifier, androidx.compose.ui.unit.Dp) -> Unit,
+    videoStage: @Composable (Modifier, Boolean, Boolean) -> Unit,
+    audioDeck: @Composable (Modifier, Dp) -> Unit,
     editBox: @Composable (Modifier, Boolean) -> Unit,
     subtitleGrid: @Composable (Modifier, Boolean) -> Unit,
+    onPickMedia: () -> Unit,
+    onSetVisualOverlay: (Boolean) -> Unit,
     onOpenStyles: () -> Unit,
-    onOpenFixErrors: () -> Unit,
     onOpenExport: () -> Unit,
 ) {
-    // 0 = 影音同屏, 1 = 音频打轴, 2 = 视频打字, 3 = 专注文本
-    var phoneMode by remember { mutableIntStateOf(0) }
+    // 0 = 字幕浏览与编辑, 1 = 音频波形打轴, 2 = 画面视觉排版
+    var phoneTab by remember { mutableIntStateOf(0) }
 
     Column(Modifier.fillMaxSize()) {
         topBar()
 
-        // 手机顶部舞台模式快切条
-        Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                FilterChip(selected = phoneMode == 0, onClick = { phoneMode = 0 }, label = { Text("影音同屏") })
-                FilterChip(selected = phoneMode == 1, onClick = { phoneMode = 1 }, label = { Text("音频打轴") })
-                FilterChip(selected = phoneMode == 2, onClick = { phoneMode = 2 }, label = { Text("视频打字") })
-                FilterChip(selected = phoneMode == 3, onClick = { phoneMode = 3 }, label = { Text("专注文本") })
-            }
-        }
-
-        when (phoneMode) {
+        when (phoneTab) {
             0 -> {
-                videoStage(Modifier.fillMaxWidth().height(195.dp), true)
-                audioDeck(Modifier.fillMaxWidth(), 86.dp)
+                if (hasMedia) {
+                    videoStage(Modifier.fillMaxWidth().height(196.dp), true, false)
+                } else {
+                    // 未加载视频时不堆砌大黑框，仅保留一条清爽的关联提示条，将全屏空间让给字幕列表！
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth().clickable(onClick = onPickMedia),
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Filled.Movie,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "点击关联视频或音频文件，开启画面预览与波形打轴",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
             }
             1 -> {
-                audioDeck(Modifier.fillMaxWidth(), 156.dp)
+                audioDeck(Modifier.fillMaxWidth(), 160.dp)
             }
-            2 -> {
-                videoStage(Modifier.fillMaxWidth().height(250.dp), true)
+            else -> {
+                videoStage(Modifier.fillMaxWidth().height(236.dp), true, true)
             }
-            else -> Unit
         }
 
         HorizontalDivider()
@@ -811,36 +836,35 @@ private fun PhoneCompactStudioLayout(
         HorizontalDivider()
         subtitleGrid(Modifier.weight(1f).fillMaxWidth(), false)
 
-        // 底部单手大拇指快捷栏
-        NavigationBar(modifier = Modifier.height(56.dp), tonalElevation = 3.dp) {
+        NavigationBar(modifier = Modifier.height(58.dp), tonalElevation = 2.dp) {
             NavigationBarItem(
-                selected = phoneMode == 1,
-                onClick = { phoneMode = if (phoneMode == 1) 0 else 1 },
-                icon = { Icon(Icons.Filled.GraphicEq, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                selected = phoneTab == 0,
+                onClick = { phoneTab = 0; onSetVisualOverlay(false) },
+                icon = { Icon(Icons.Filled.Subtitles, contentDescription = null, modifier = Modifier.size(19.dp)) },
+                label = { Text("字幕", style = MaterialTheme.typography.labelSmall) },
+            )
+            NavigationBarItem(
+                selected = phoneTab == 1,
+                onClick = { phoneTab = 1; onSetVisualOverlay(false) },
+                icon = { Icon(Icons.Filled.GraphicEq, contentDescription = null, modifier = Modifier.size(19.dp)) },
                 label = { Text("打轴", style = MaterialTheme.typography.labelSmall) },
             )
             NavigationBarItem(
-                selected = phoneMode == 2,
-                onClick = { phoneMode = if (phoneMode == 2) 0 else 2 },
-                icon = { Icon(Icons.Filled.Movie, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                label = { Text("打字", style = MaterialTheme.typography.labelSmall) },
+                selected = phoneTab == 2,
+                onClick = { phoneTab = 2; onSetVisualOverlay(true) },
+                icon = { Icon(Icons.Filled.CropFree, contentDescription = null, modifier = Modifier.size(19.dp)) },
+                label = { Text("排版", style = MaterialTheme.typography.labelSmall) },
             )
             NavigationBarItem(
                 selected = false,
                 onClick = onOpenStyles,
-                icon = { Icon(Icons.Filled.Palette, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                icon = { Icon(Icons.Filled.Palette, contentDescription = null, modifier = Modifier.size(19.dp)) },
                 label = { Text("样式", style = MaterialTheme.typography.labelSmall) },
             )
             NavigationBarItem(
                 selected = false,
-                onClick = onOpenFixErrors,
-                icon = { Icon(Icons.Filled.AutoFixHigh, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                label = { Text("修复", style = MaterialTheme.typography.labelSmall) },
-            )
-            NavigationBarItem(
-                selected = false,
                 onClick = onOpenExport,
-                icon = { Icon(Icons.Filled.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                icon = { Icon(Icons.Filled.FileDownload, contentDescription = null, modifier = Modifier.size(19.dp)) },
                 label = { Text("导出", style = MaterialTheme.typography.labelSmall) },
             )
         }
@@ -849,11 +873,18 @@ private fun PhoneCompactStudioLayout(
 
 @Composable
 private fun VerticalDragSplitter(onDragDeltaPx: (Float) -> Unit) {
+    val hoverSource = remember { MutableInteractionSource() }
+    val hovered by hoverSource.collectIsHoveredAsState()
     Box(
         Modifier
-            .width(8.dp)
+            .width(10.dp)
             .fillMaxHeight()
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .hoverable(hoverSource)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .background(
+                if (hovered) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                else MaterialTheme.colorScheme.surfaceContainerHighest,
+            )
             .pointerInput(Unit) {
                 detectDragGestures { change, dragAmount ->
                     change.consume()
@@ -866,18 +897,25 @@ private fun VerticalDragSplitter(onDragDeltaPx: (Float) -> Unit) {
             Modifier
                 .width(2.dp)
                 .height(28.dp)
-                .background(MaterialTheme.colorScheme.outline),
+                .background(if (hovered) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
         )
     }
 }
 
 @Composable
 private fun HorizontalDragSplitter(onDragDeltaPx: (Float) -> Unit) {
+    val hoverSource = remember { MutableInteractionSource() }
+    val hovered by hoverSource.collectIsHoveredAsState()
     Box(
         Modifier
             .fillMaxWidth()
-            .height(8.dp)
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .height(10.dp)
+            .hoverable(hoverSource)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .background(
+                if (hovered) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                else MaterialTheme.colorScheme.surfaceContainerHighest,
+            )
             .pointerInput(Unit) {
                 detectDragGestures { change, dragAmount ->
                     change.consume()
@@ -890,7 +928,7 @@ private fun HorizontalDragSplitter(onDragDeltaPx: (Float) -> Unit) {
             Modifier
                 .width(36.dp)
                 .height(2.dp)
-                .background(MaterialTheme.colorScheme.outline),
+                .background(if (hovered) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
         )
     }
 }

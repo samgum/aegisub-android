@@ -19,21 +19,24 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardReturn
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatClear
 import androidx.compose.material.icons.filled.FormatItalic
+import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.FormatStrikethrough
 import androidx.compose.material.icons.filled.FormatUnderlined
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
@@ -57,7 +60,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -81,9 +94,7 @@ import io.github.samgum.aegisub.feature.preview.PlaybackState
 import io.github.samgum.aegisub.feature.preview.components.AegisubAudioBox
 
 /**
- * 桌面级 Aegisub 音频打轴区（Audio Box）：
- * 顶部音频操作工具栏（上/下句、设起/设止、播放句/首500ms/末500ms/前后500ms、加前导/后导、波形/频谱、卡拉OK切分、视口缩放）
- * + 下方 [AegisubAudioBox] 可缩放波形/频谱画布。
+ * 音频打轴操作台：清爽的主打轴按钮 + 次级试听菜单 + 可捏合/滚轮缩放波形频谱画布。
  *
  * @author 伤感咩吖
  */
@@ -96,7 +107,7 @@ fun AudioTimingDeck(
     playback: PlaybackState,
     keyframesMs: List<Long>,
     snapToKeyframes: Boolean,
-    audioHeight: Dp = 128.dp,
+    audioHeight: Dp = 132.dp,
     onSelectPrev: () -> Unit,
     onSelectNext: () -> Unit,
     onSetStartToPos: () -> Unit,
@@ -118,86 +129,112 @@ fun AudioTimingDeck(
     var karaokeMode by remember { mutableStateOf(false) }
     var autoScroll by remember { mutableStateOf(true) }
     var windowSpanMs by remember { mutableLongStateOf(10_000L) }
+    var moreTimingMenu by remember { mutableStateOf(false) }
 
     Column(modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow)) {
-        // 音频专用控制栏（对齐桌面 Aegisub Audio Toolbar）
+        // 整洁易读的打轴控制条（高频按钮突出，次级切点试听收纳进菜单）
         Row(
             Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 6.dp, vertical = 3.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            IconButton(onClick = onSelectPrev, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Filled.SkipPrevious, contentDescription = "上一行", modifier = Modifier.size(18.dp))
+            IconButton(onClick = onSelectPrev, modifier = Modifier.size(32.dp).pointerHoverIcon(PointerIcon.Hand)) {
+                Icon(Icons.Filled.SkipPrevious, contentDescription = "上一句", modifier = Modifier.size(19.dp))
             }
+
             Button(
                 onClick = onSetStartToPos,
                 enabled = activeEvent != null,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                modifier = Modifier.height(28.dp),
+                modifier = Modifier.height(32.dp).pointerHoverIcon(PointerIcon.Hand),
             ) {
-                Text("[ 设起", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                Text("设为起点", style = MaterialTheme.typography.labelMedium, color = Color.White)
             }
+
+            FilledTonalButton(
+                onClick = onPlayActiveLine,
+                enabled = activeEvent != null,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                modifier = Modifier.height(32.dp).pointerHoverIcon(PointerIcon.Hand),
+            ) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(2.dp))
+                Text("本句", style = MaterialTheme.typography.labelMedium)
+            }
+
             Button(
                 onClick = onSetEndToPos,
                 enabled = activeEvent != null,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
-                modifier = Modifier.height(28.dp),
+                modifier = Modifier.height(32.dp).pointerHoverIcon(PointerIcon.Hand),
             ) {
-                Text("设止 ]", style = MaterialTheme.typography.labelSmall, color = Color.White)
-            }
-            IconButton(onClick = onSelectNext, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Filled.SkipNext, contentDescription = "下一行", modifier = Modifier.size(18.dp))
+                Text("设为终点", style = MaterialTheme.typography.labelMedium, color = Color.White)
             }
 
-            SmallToolbarChip("▶本句", onClick = onPlayActiveLine)
-            SmallToolbarChip("前导+IN", onClick = onAddLeadIn)
-            SmallToolbarChip("后导+OUT", onClick = onAddLeadOut)
-            SmallToolbarChip("首0.5s", onClick = onPlayFirst500)
-            SmallToolbarChip("末0.5s", onClick = onPlayLast500)
-            SmallToolbarChip("前0.5s", onClick = onPlayBefore)
-            SmallToolbarChip("后0.5s", onClick = onPlayAfter)
-            SmallToolbarChip("✔提交[G]", highlight = true, onClick = onCommitAndNext)
+            IconButton(onClick = onSelectNext, modifier = Modifier.size(32.dp).pointerHoverIcon(PointerIcon.Hand)) {
+                Icon(Icons.Filled.SkipNext, contentDescription = "下一句", modifier = Modifier.size(19.dp))
+            }
 
             FilterChip(
                 selected = showSpectrogram,
                 onClick = { showSpectrogram = !showSpectrogram },
-                label = { Text(if (showSpectrogram) "频谱" else "波形", style = MaterialTheme.typography.labelSmall) },
-                modifier = Modifier.height(28.dp),
+                label = { Text(if (showSpectrogram) "频谱图" else "波形图", style = MaterialTheme.typography.labelSmall) },
+                modifier = Modifier.height(30.dp),
             )
+
             FilterChip(
                 selected = karaokeMode,
                 onClick = { karaokeMode = !karaokeMode },
                 label = { Text("卡拉OK切音", style = MaterialTheme.typography.labelSmall) },
-                modifier = Modifier.height(28.dp),
-            )
-            FilterChip(
-                selected = autoScroll,
-                onClick = { autoScroll = !autoScroll },
-                label = { Text("跟手", style = MaterialTheme.typography.labelSmall) },
-                modifier = Modifier.height(28.dp),
+                modifier = Modifier.height(30.dp),
             )
 
-            // 视口时间宽度缩放（2s .. 60s）
+            Box {
+                IconButton(
+                    onClick = { moreTimingMenu = true },
+                    modifier = Modifier.size(30.dp).pointerHoverIcon(PointerIcon.Hand),
+                ) {
+                    Icon(Icons.Filled.MoreHoriz, contentDescription = "更多打轴微调", modifier = Modifier.size(18.dp))
+                }
+                DropdownMenu(expanded = moreTimingMenu, onDismissRequest = { moreTimingMenu = false }) {
+                    DropdownMenuItem(text = { Text("延长前导 (Lead-In)") }, onClick = { moreTimingMenu = false; onAddLeadIn() })
+                    DropdownMenuItem(text = { Text("延长后导 (Lead-Out)") }, onClick = { moreTimingMenu = false; onAddLeadOut() })
+                    HorizontalDivider()
+                    DropdownMenuItem(text = { Text("试听句首 0.5 秒") }, onClick = { moreTimingMenu = false; onPlayFirst500() })
+                    DropdownMenuItem(text = { Text("试听句末 0.5 秒") }, onClick = { moreTimingMenu = false; onPlayLast500() })
+                    DropdownMenuItem(text = { Text("试听切入前 0.5 秒") }, onClick = { moreTimingMenu = false; onPlayBefore() })
+                    DropdownMenuItem(text = { Text("试听切出后 0.5 秒") }, onClick = { moreTimingMenu = false; onPlayAfter() })
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text(if (autoScroll) "✓ 播放头自动翻页跟随" else "播放头自动翻页跟随") },
+                        onClick = { autoScroll = !autoScroll; moreTimingMenu = false },
+                    )
+                }
+            }
+
+            Spacer(Modifier.weight(1f))
+
             IconButton(
                 onClick = { windowSpanMs = (windowSpanMs * 2 / 3).coerceAtLeast(2_000L) },
-                modifier = Modifier.size(26.dp),
+                modifier = Modifier.size(28.dp).pointerHoverIcon(PointerIcon.Hand),
             ) {
-                Icon(Icons.Filled.ZoomIn, contentDescription = "放大音频时间窗", modifier = Modifier.size(16.dp))
+                Icon(Icons.Filled.ZoomIn, contentDescription = "放大时间窗", modifier = Modifier.size(16.dp))
             }
             Text(
-                "${windowSpanMs / 1000}s窗",
+                "${windowSpanMs / 1000}s",
                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             IconButton(
                 onClick = { windowSpanMs = (windowSpanMs * 3 / 2).coerceAtMost(60_000L) },
-                modifier = Modifier.size(26.dp),
+                modifier = Modifier.size(28.dp).pointerHoverIcon(PointerIcon.Hand),
             ) {
-                Icon(Icons.Filled.ZoomOut, contentDescription = "缩小音频时间窗", modifier = Modifier.size(16.dp))
+                Icon(Icons.Filled.ZoomOut, contentDescription = "缩小时间窗", modifier = Modifier.size(16.dp))
             }
         }
 
@@ -217,17 +254,14 @@ fun AudioTimingDeck(
             onSeek = onSeek,
             onCommitTimes = onCommitTimes,
             onCommitKaraokeText = onCommitKaraokeText,
+            onWindowDurationChange = { windowSpanMs = it },
             modifier = Modifier.fillMaxWidth().height(audioHeight),
         )
     }
 }
 
 /**
- * 桌面级 Aegisub 字幕编辑框（SubsEditBox 完整复刻版 + SGMY AI 按钮 + ASS 标签语法着色）：
- * - 完整字段：注释勾选、样式选择、说话人 Actor、特效 Effect、图层 Layer、开始/结束/时长微调、L/R/V 边距
- * - 快捷格式栏：`\b` 粗体、`\i` 斜体、`\u` 下划线、`\s` 删除线、`1c..4c` 四色调色器、`\N` 换行、`\h` 硬空格、`清标签`
- * - 右侧醒目集成 **SGMY `✨ AI 分析` 按钮**（对齐桌面 `dialog_ai_analysis.cpp` 文本框旁按钮位置！）
- * - 底部实时显示可见字数、CPS 语速与 SGMY 超画幅溢出状态提示。
+ * 清爽直观的字幕编辑框（按需展开详细属性与格式条，完美兼容外接物理键盘回车提交与焦点隔离）。
  */
 @Composable
 fun AegisubSubsEditBox(
@@ -249,18 +283,20 @@ fun AegisubSubsEditBox(
     onSetInlineColor: (Int, AssColor) -> Unit,
     onCommitAndNext: () -> Unit,
     onOpenAiAnalysis: () -> Unit,
+    onInputFocusChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     if (event == null) {
         Box(modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
-            Text("当前无选中字幕行", style = MaterialTheme.typography.bodySmall)
+            Text("点击列表选择字幕行", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
         }
         return
     }
 
-    var expandMetaInCompact by remember { mutableStateOf(!compactMode) }
+    var showDetailFields by remember { mutableStateOf(!compactMode) }
+    var showFormatStrip by remember { mutableStateOf(!compactMode) }
     var styleDropdownOpen by remember { mutableStateOf(false) }
-    var pickingColorSlot by remember { mutableIntStateOf(0) } // 1..4
+    var pickingColorSlot by remember { mutableIntStateOf(0) }
 
     var startInput by remember(event.id, event.start) { mutableStateOf(event.start.toAssString(false)) }
     var endInput by remember(event.id, event.end) { mutableStateOf(event.end.toAssString(false)) }
@@ -271,26 +307,16 @@ fun AegisubSubsEditBox(
         color = MaterialTheme.colorScheme.surface,
         modifier = modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            // 第一行：注释勾选 + 样式选择 + 说话人/层 + 展开切换 + 提交按钮 + SGMY AI 按钮
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            // 顶部简洁状态与开关栏
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { onCommentChange(!event.comment) },
-                ) {
-                    Checkbox(
-                        checked = event.comment,
-                        onCheckedChange = onCommentChange,
-                        modifier = Modifier.size(24.dp),
-                    )
-                    Text("注释", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 2.dp))
-                }
-
-                // 样式下拉按钮
                 Box {
                     FilterChip(
                         selected = true,
@@ -309,54 +335,113 @@ fun AegisubSubsEditBox(
                 }
 
                 Text(
-                    "${event.start.toAssString(false)} → ${event.end.toAssString(false)} (${"%.2f".format(event.durationMs / 1000.0)}s)",
+                    "${event.start.toAssString(false)} – ${event.end.toAssString(false)} (${"%.1f".format(event.durationMs / 1000.0)}s)",
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
-                TextButton(
-                    onClick = { expandMetaInCompact = !expandMetaInCompact },
-                    contentPadding = PaddingValues(horizontal = 6.dp),
-                    modifier = Modifier.height(26.dp),
-                ) {
-                    Text(if (expandMetaInCompact) "收起属性▲" else "详细属性▼", style = MaterialTheme.typography.labelSmall)
+                FilterChip(
+                    selected = event.comment,
+                    onClick = { onCommentChange(!event.comment) },
+                    label = { Text("注释", style = MaterialTheme.typography.labelSmall) },
+                    modifier = Modifier.height(28.dp),
+                )
+
+                if (compactMode) {
+                    IconButton(
+                        onClick = { showDetailFields = !showDetailFields },
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.Tune,
+                            contentDescription = "时间与边距属性",
+                            tint = if (showDetailFields) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(17.dp),
+                        )
+                    }
+                    IconButton(
+                        onClick = { showFormatStrip = !showFormatStrip },
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.FormatSize,
+                            contentDescription = "文字格式与颜色",
+                            tint = if (showFormatStrip) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+
+                Spacer(Modifier.weight(1f))
+
+                // 字数与溢出提示（仅正常显示精简字数，溢出时变红）
+                val isOver = overflowResult?.isOverflowing == true
+                val highCps = overflowResult?.isHighCps == true
+                if (event.visibleCharCount > 0 || isOver) {
+                    Surface(
+                        color = when {
+                            isOver -> MaterialTheme.colorScheme.errorContainer
+                            highCps -> MaterialTheme.colorScheme.tertiaryContainer
+                            else -> MaterialTheme.colorScheme.surfaceContainerHigh
+                        },
+                        shape = MaterialTheme.shapes.extraSmall,
+                    ) {
+                        val infoText = when {
+                            isOver -> "${event.visibleCharCount}字 · 超出画幅"
+                            highCps -> "${event.visibleCharCount}字 · ${event.cps}字/秒"
+                            else -> "${event.visibleCharCount}字"
+                        }
+                        Text(
+                            text = infoText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = when {
+                                isOver -> MaterialTheme.colorScheme.onErrorContainer
+                                highCps -> MaterialTheme.colorScheme.onTertiaryContainer
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
                 }
 
                 if (aiEnabled) {
-                    FilledTonalButton(
+                    IconButton(
                         onClick = onOpenAiAnalysis,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        modifier = Modifier.height(28.dp),
+                        modifier = Modifier.size(30.dp).pointerHoverIcon(PointerIcon.Hand),
                     ) {
-                        Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("AI 分析", style = MaterialTheme.typography.labelSmall)
+                        Icon(
+                            Icons.Filled.AutoAwesome,
+                            contentDescription = "AI 润色与分析",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
                     }
                 }
 
                 Button(
                     onClick = onCommitAndNext,
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                    modifier = Modifier.height(28.dp),
+                    modifier = Modifier.height(28.dp).pointerHoverIcon(PointerIcon.Hand),
                 ) {
-                    Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(3.dp))
-                    Text("提交[G]", style = MaterialTheme.typography.labelSmall)
+                    Icon(Icons.AutoMirrored.Filled.KeyboardReturn, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("下一句", style = MaterialTheme.typography.labelSmall)
                 }
             }
 
-            // 展开元数据行：精确时间输入 + ±50ms 微调 + Layer / Actor / Effect / L-R-V 边距
-            if (expandMetaInCompact) {
+            // 详细时间微调与层/说话人/边距面板（桌面常驻，手机按需展开）
+            if (showDetailFields) {
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     CompactMetaField(
-                        label = "起始",
+                        label = "开始",
                         value = startInput,
-                        width = 102.dp,
+                        width = 100.dp,
                         mono = true,
+                        onFocusChanged = onInputFocusChanged,
                         onValueChange = { raw ->
                             startInput = raw
                             runCatching { SubTime.parseAss(raw) }.onSuccess { s ->
@@ -370,8 +455,9 @@ fun AegisubSubsEditBox(
                     CompactMetaField(
                         label = "结束",
                         value = endInput,
-                        width = 102.dp,
+                        width = 100.dp,
                         mono = true,
+                        onFocusChanged = onInputFocusChanged,
                         onValueChange = { raw ->
                             endInput = raw
                             runCatching { SubTime.parseAss(raw) }.onSuccess { e ->
@@ -383,22 +469,25 @@ fun AegisubSubsEditBox(
                     SmallToolbarChip("+50ms") { onNudgeEnd(50L) }
 
                     CompactMetaField(
-                        label = "层L",
+                        label = "图层",
                         value = event.layer.toString(),
-                        width = 54.dp,
+                        width = 56.dp,
                         numberOnly = true,
+                        onFocusChanged = onInputFocusChanged,
                         onValueChange = { it.toIntOrNull()?.let(onLayerChange) },
                     )
                     CompactMetaField(
-                        label = "说话人 Actor",
+                        label = "说话人",
                         value = event.actor,
-                        width = 98.dp,
+                        width = 92.dp,
+                        onFocusChanged = onInputFocusChanged,
                         onValueChange = onActorChange,
                     )
                     CompactMetaField(
-                        label = "特效 Effect",
+                        label = "特效备注",
                         value = event.effect,
-                        width = 98.dp,
+                        width = 92.dp,
+                        onFocusChanged = onInputFocusChanged,
                         onValueChange = onEffectChange,
                     )
                     CompactMetaField(
@@ -406,6 +495,7 @@ fun AegisubSubsEditBox(
                         value = event.margins.left.toString(),
                         width = 54.dp,
                         numberOnly = true,
+                        onFocusChanged = onInputFocusChanged,
                         onValueChange = { v -> v.toIntOrNull()?.let { onMarginsChange(event.margins.copy(left = it)) } },
                     )
                     CompactMetaField(
@@ -413,6 +503,7 @@ fun AegisubSubsEditBox(
                         value = event.margins.right.toString(),
                         width = 54.dp,
                         numberOnly = true,
+                        onFocusChanged = onInputFocusChanged,
                         onValueChange = { v -> v.toIntOrNull()?.let { onMarginsChange(event.margins.copy(right = it)) } },
                     )
                     CompactMetaField(
@@ -420,104 +511,94 @@ fun AegisubSubsEditBox(
                         value = event.margins.vertical.toString(),
                         width = 54.dp,
                         numberOnly = true,
+                        onFocusChanged = onInputFocusChanged,
                         onValueChange = { v -> v.toIntOrNull()?.let { onMarginsChange(event.margins.copy(vertical = it)) } },
                     )
                 }
             }
 
-            // ASS 行内快捷格式工具条（B / I / U / S / 四色 1c..4c / \N / \h / \blur / 去标签）
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                IconButton(
-                    onClick = {
-                        val on = !event.text.contains("\\b1")
-                        onTextChange(VisualTags.setInlineToggle(event.text, "b", on))
-                    },
-                    modifier = Modifier.size(28.dp),
-                ) { Icon(Icons.Filled.FormatBold, contentDescription = "\\b 粗体", modifier = Modifier.size(17.dp)) }
-
-                IconButton(
-                    onClick = {
-                        val on = !event.text.contains("\\i1")
-                        onTextChange(VisualTags.setInlineToggle(event.text, "i", on))
-                    },
-                    modifier = Modifier.size(28.dp),
-                ) { Icon(Icons.Filled.FormatItalic, contentDescription = "\\i 斜体", modifier = Modifier.size(17.dp)) }
-
-                IconButton(
-                    onClick = {
-                        val on = !event.text.contains("\\u1")
-                        onTextChange(VisualTags.setInlineToggle(event.text, "u", on))
-                    },
-                    modifier = Modifier.size(28.dp),
-                ) { Icon(Icons.Filled.FormatUnderlined, contentDescription = "\\u 下划线", modifier = Modifier.size(17.dp)) }
-
-                IconButton(
-                    onClick = {
-                        val on = !event.text.contains("\\s1")
-                        onTextChange(VisualTags.setInlineToggle(event.text, "s", on))
-                    },
-                    modifier = Modifier.size(28.dp),
-                ) { Icon(Icons.Filled.FormatStrikethrough, contentDescription = "\\s 删除线", modifier = Modifier.size(17.dp)) }
-
-                ColorSlotDot("1c", baseStyle.primary) { pickingColorSlot = 1 }
-                ColorSlotDot("2c", baseStyle.secondary) { pickingColorSlot = 2 }
-                ColorSlotDot("3c", baseStyle.outline) { pickingColorSlot = 3 }
-                ColorSlotDot("4c", baseStyle.shadow) { pickingColorSlot = 4 }
-
-                SmallToolbarChip("\\N 换行") { onTextChange(event.text + "\\N") }
-                SmallToolbarChip("\\h 硬空") { onTextChange(event.text + "\\h") }
-                SmallToolbarChip("\\blur1") { onTextChange(VisualTags.setBlur(event.text, 1.0)) }
-                SmallToolbarChip("\\fad") { onTextChange(VisualTags.setFade(event.text, 200, 200)) }
-                IconButton(
-                    onClick = { onTextChange(event.strippedText) },
-                    modifier = Modifier.size(28.dp),
-                ) { Icon(Icons.Filled.FormatClear, contentDescription = "剥离全部覆盖标签", modifier = Modifier.size(17.dp)) }
-
-                Spacer(Modifier.weight(1f))
-
-                // 实时字数 / CPS / SGMY 超画幅指示器
-                val isOver = overflowResult?.isOverflowing == true
-                val highCps = overflowResult?.isHighCps == true
-                Surface(
-                    color = when {
-                        isOver -> MaterialTheme.colorScheme.errorContainer
-                        highCps -> MaterialTheme.colorScheme.tertiaryContainer
-                        else -> MaterialTheme.colorScheme.surfaceContainerHighest
-                    },
-                    shape = MaterialTheme.shapes.extraSmall,
+            // 行内格式与颜色条（桌面常驻，手机按需展开）
+            if (showFormatStrip) {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    val statusLabel = buildString {
-                        append("${event.visibleCharCount}字 · ${event.cps} CPS")
-                        if (isOver) append(" · ⚠超出画幅")
-                        else if (highCps) append(" · 语速偏快")
-                    }
-                    Text(
-                        text = statusLabel,
-                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
-                        color = when {
-                            isOver -> MaterialTheme.colorScheme.onErrorContainer
-                            highCps -> MaterialTheme.colorScheme.onTertiaryContainer
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    )
+                    IconButton(
+                        onClick = { onTextChange(VisualTags.setInlineToggle(event.text, "b", !event.text.contains("\\b1"))) },
+                        modifier = Modifier.size(28.dp).pointerHoverIcon(PointerIcon.Hand),
+                    ) { Icon(Icons.Filled.FormatBold, contentDescription = "加粗", modifier = Modifier.size(17.dp)) }
+
+                    IconButton(
+                        onClick = { onTextChange(VisualTags.setInlineToggle(event.text, "i", !event.text.contains("\\i1"))) },
+                        modifier = Modifier.size(28.dp).pointerHoverIcon(PointerIcon.Hand),
+                    ) { Icon(Icons.Filled.FormatItalic, contentDescription = "斜体", modifier = Modifier.size(17.dp)) }
+
+                    IconButton(
+                        onClick = { onTextChange(VisualTags.setInlineToggle(event.text, "u", !event.text.contains("\\u1"))) },
+                        modifier = Modifier.size(28.dp).pointerHoverIcon(PointerIcon.Hand),
+                    ) { Icon(Icons.Filled.FormatUnderlined, contentDescription = "下划线", modifier = Modifier.size(17.dp)) }
+
+                    IconButton(
+                        onClick = { onTextChange(VisualTags.setInlineToggle(event.text, "s", !event.text.contains("\\s1"))) },
+                        modifier = Modifier.size(28.dp).pointerHoverIcon(PointerIcon.Hand),
+                    ) { Icon(Icons.Filled.FormatStrikethrough, contentDescription = "删除线", modifier = Modifier.size(17.dp)) }
+
+                    ColorSlotDot("主色", baseStyle.primary) { pickingColorSlot = 1 }
+                    ColorSlotDot("次色", baseStyle.secondary) { pickingColorSlot = 2 }
+                    ColorSlotDot("描边", baseStyle.outline) { pickingColorSlot = 3 }
+                    ColorSlotDot("阴影", baseStyle.shadow) { pickingColorSlot = 4 }
+
+                    SmallToolbarChip("换行 \\N") { onTextChange(event.text + "\\N") }
+                    SmallToolbarChip("淡入淡出") { onTextChange(VisualTags.setFade(event.text, 200, 200)) }
+                    SmallToolbarChip("柔化边缘") { onTextChange(VisualTags.setBlur(event.text, 1.2)) }
+
+                    IconButton(
+                        onClick = { onTextChange(event.strippedText) },
+                        modifier = Modifier.size(28.dp).pointerHoverIcon(PointerIcon.Hand),
+                    ) { Icon(Icons.Filled.FormatClear, contentDescription = "清除样式标签", modifier = Modifier.size(17.dp)) }
                 }
             }
 
-            // 主字幕文本编辑框（带 ASS {...} 标签实时语法高亮，1:1 复刻桌面 Scintilla 高亮体验）
+            // 台词输入框：支持键盘 Enter 提交下一句、Shift+Enter 插入 \N、Ctrl+B/I/U 快捷加粗斜体
             OutlinedTextField(
                 value = event.text,
                 onValueChange = onTextChange,
                 visualTransformation = remember { AssSyntaxVisualTransformation() },
-                textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                minLines = if (compactMode) 2 else 3,
-                maxLines = if (compactMode) 3 else 5,
-                placeholder = { Text("输入字幕文本（支持 {\\pos(x,y)\\fad(200,200)} 等全部 ASS 标签）…") },
-                modifier = Modifier.fillMaxWidth(),
+                textStyle = MaterialTheme.typography.bodyMedium,
+                minLines = if (compactMode) 1 else 2,
+                maxLines = if (compactMode) 3 else 4,
+                placeholder = { Text("输入字幕内容…") },
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { onInputFocusChanged(it.isFocused) }
+                    .onPreviewKeyEvent { ke ->
+                        if (ke.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when {
+                            (ke.key == Key.Enter || ke.key == Key.NumPadEnter) && !ke.isShiftPressed && !ke.isCtrlPressed -> {
+                                onCommitAndNext()
+                                true
+                            }
+                            (ke.key == Key.Enter || ke.key == Key.NumPadEnter) && ke.isShiftPressed -> {
+                                onTextChange(event.text + "\\N")
+                                true
+                            }
+                            ke.isCtrlPressed && ke.key == Key.B -> {
+                                onTextChange(VisualTags.setInlineToggle(event.text, "b", !event.text.contains("\\b1")))
+                                true
+                            }
+                            ke.isCtrlPressed && ke.key == Key.I -> {
+                                onTextChange(VisualTags.setInlineToggle(event.text, "i", !event.text.contains("\\i1")))
+                                true
+                            }
+                            ke.isCtrlPressed && ke.key == Key.U -> {
+                                onTextChange(VisualTags.setInlineToggle(event.text, "u", !event.text.contains("\\u1")))
+                                true
+                            }
+                            else -> false
+                        }
+                    },
             )
         }
     }
@@ -547,17 +628,18 @@ private fun ColorSlotDot(label: String, color: AssColor, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .clip(MaterialTheme.shapes.extraSmall)
+            .pointerHoverIcon(PointerIcon.Hand)
             .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 2.dp),
+            .padding(horizontal = 5.dp, vertical = 3.dp),
     ) {
         Box(
             Modifier
-                .size(14.dp)
+                .size(13.dp)
                 .clip(CircleShape)
                 .background(Color(color.r / 255f, color.g / 255f, color.b / 255f, 1f))
                 .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
         )
-        Text(label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 2.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 3.dp))
     }
 }
 
@@ -569,10 +651,13 @@ private fun SmallToolbarChip(
 ) {
     Surface(
         color = if (highlight) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
-        shape = MaterialTheme.shapes.extraSmall,
-        modifier = Modifier.height(26.dp).clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier
+            .height(28.dp)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .clickable(onClick = onClick),
     ) {
-        Box(Modifier.padding(horizontal = 7.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
             Text(
                 label,
                 style = MaterialTheme.typography.labelSmall,
@@ -589,6 +674,7 @@ private fun CompactMetaField(
     width: Dp,
     mono: Boolean = false,
     numberOnly: Boolean = false,
+    onFocusChanged: (Boolean) -> Unit = {},
     onValueChange: (String) -> Unit,
 ) {
     OutlinedTextField(
@@ -600,15 +686,12 @@ private fun CompactMetaField(
             if (mono) it.copy(fontFamily = FontFamily.Monospace) else it
         },
         keyboardOptions = if (numberOnly) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
-        modifier = Modifier.width(width),
+        modifier = Modifier.width(width).onFocusChanged { onFocusChanged(it.isFocused) },
     )
 }
 
 /**
- * 零偏移 ASS 覆盖标签语法着色器（严格保持 1:1 字符长度与 [OffsetMapping.Identity]，输入法光标永不错位）：
- * - `{` 与 `}` 括号：柔和青灰
- * - `\tag` 命令名：亮天蓝加粗
- * - `\N` / `\n` / `\h` 转义：琥珀橙高亮
+ * 零偏移 ASS 标签语法高亮器（保持 1:1 字符索引映射，光标零漂移）。
  */
 private class AssSyntaxVisualTransformation : VisualTransformation {
     private val braceStyle = SpanStyle(color = Color(0xFF94A3B8), fontWeight = FontWeight.Bold)
@@ -669,14 +752,14 @@ private fun QuickAssColorDialog(
     var g by remember { mutableIntStateOf(initial.g) }
     var b by remember { mutableIntStateOf(initial.b) }
     val slotName = when (slot) {
-        1 -> "\\1c 主填充色"
-        2 -> "\\2c 卡拉OK次色"
-        3 -> "\\3c 描边色"
-        else -> "\\4c 阴影色"
+        1 -> "主填充色 (\\1c)"
+        2 -> "次填充色 (\\2c)"
+        3 -> "描边色 (\\3c)"
+        else -> "阴影色 (\\4c)"
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("设置行内颜色 ($slotName)") },
+        title = { Text("选择$slotName") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(
@@ -704,7 +787,7 @@ private fun QuickAssColorDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onApply(AssColor(r, g, b, 255)) }) { Text("插入标签") }
+            TextButton(onClick = { onApply(AssColor(r, g, b, 255)) }) { Text("应用") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消") }

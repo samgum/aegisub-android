@@ -3,12 +3,14 @@ package io.github.samgum.aegisub.ui.workspace.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -21,6 +23,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.RotateLeft
+import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.AdsClick
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.CropFree
@@ -30,11 +36,8 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material.icons.filled.Polyline
-import androidx.compose.material.icons.automirrored.filled.RotateLeft
-import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.ZoomInMap
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -60,6 +63,11 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -76,11 +84,7 @@ import io.github.samgum.aegisub.feature.preview.components.VisualTypesettingOver
 import kotlin.math.roundToInt
 
 /**
- * 桌面级 Aegisub 视频舞台组件：
- * - 左侧常驻桌面 Aegisub 经典 **8 工具可视化打字竖条**（十字准星 / `\pos` / `\move` / `\frz` / `\frx\fry+\org` / `\fscx\fscy` / 矩形 `\clip` / 矢量 `\clip`）
- * - 画幅严格锁定真实视频宽高比（或脚本 `PlayResX:PlayResY` / 手动比例覆盖），彻底修复黑边拉伸导致 `\pos` 偏移的旧版顽疾！
- * - 支持双指捏合缩放与平移（`50%–300%`）、安全框辅助线（Overscan Safe Area）、SGMY **HDR / Dolby Vision / BT.2020 色域徽标**
- * - 底部传输控制条含帧号读数、逐帧步进、播放当前行、`0.25x–4.0x` SGMY 保调倍速！
+ * 定比视频预览与可视化排版舞台（支持触控捏合缩放 + 鼠标滚轮缩放 + 单击播放暂停 + 8 大排版工具）。
  *
  * @author 伤感咩吖
  */
@@ -112,6 +116,7 @@ fun VideoStagePane(
     onClipRectChange: (Int, Int, Int, Int, Boolean) -> Unit,
     onVectorClipChange: (VisualTags.VectorClip) -> Unit,
     onClearVisualTags: () -> Unit,
+    showTypesettingStrip: Boolean = true,
     compactControls: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
@@ -120,7 +125,7 @@ fun VideoStagePane(
 
     var zoomScale by remember { mutableFloatStateOf(1f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
-    var arOverride by remember { mutableFloatStateOf(0f) } // 0f = 自动按视频或脚本比例
+    var arOverride by remember { mutableFloatStateOf(0f) }
     var showSafeArea by remember { mutableStateOf(false) }
     var inverseClipToggle by remember(activeEvent?.id) {
         mutableStateOf(
@@ -136,63 +141,90 @@ fun VideoStagePane(
 
     Column(modifier.background(Color(0xFF0A0D12))) {
         Row(Modifier.weight(1f).fillMaxWidth()) {
-            // 左侧可视化打字竖条（仿桌面 Aegisub 视频框左侧工具条）
-            Column(
-                Modifier
-                    .width(38.dp)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                    .verticalScroll(rememberScrollState())
-                    .padding(vertical = 2.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                VisualStripIcon(Icons.Filled.AdsClick, "十字坐标", visualOverlayEnabled && visualToolMode == VisualToolMode.CROSSHAIR) {
-                    if (visualOverlayEnabled && visualToolMode == VisualToolMode.CROSSHAIR) onVisualOverlayEnabledChange(false)
-                    else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.CROSSHAIR) }
-                }
-                VisualStripIcon(Icons.Filled.OpenWith, "\\pos 定位", visualOverlayEnabled && visualToolMode == VisualToolMode.POSITION) {
-                    if (visualOverlayEnabled && visualToolMode == VisualToolMode.POSITION) onVisualOverlayEnabledChange(false)
-                    else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.POSITION) }
-                }
-                VisualStripIcon(Icons.Filled.Timeline, "\\move 移动", visualOverlayEnabled && visualToolMode == VisualToolMode.MOVE) {
-                    if (visualOverlayEnabled && visualToolMode == VisualToolMode.MOVE) onVisualOverlayEnabledChange(false)
-                    else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.MOVE) }
-                }
-                VisualStripIcon(Icons.AutoMirrored.Filled.RotateRight, "\\frz 旋转", visualOverlayEnabled && visualToolMode == VisualToolMode.ROTATE_Z) {
-                    if (visualOverlayEnabled && visualToolMode == VisualToolMode.ROTATE_Z) onVisualOverlayEnabledChange(false)
-                    else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.ROTATE_Z) }
-                }
-                VisualStripIcon(Icons.AutoMirrored.Filled.RotateLeft, "3D旋转+\\org", visualOverlayEnabled && visualToolMode == VisualToolMode.ROTATE_XY) {
-                    if (visualOverlayEnabled && visualToolMode == VisualToolMode.ROTATE_XY) onVisualOverlayEnabledChange(false)
-                    else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.ROTATE_XY) }
-                }
-                VisualStripIcon(Icons.Filled.CropFree, "\\fsc 缩放", visualOverlayEnabled && visualToolMode == VisualToolMode.SCALE) {
-                    if (visualOverlayEnabled && visualToolMode == VisualToolMode.SCALE) onVisualOverlayEnabledChange(false)
-                    else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.SCALE) }
-                }
-                VisualStripIcon(Icons.Filled.Crop, "矩形 \\clip", visualOverlayEnabled && visualToolMode == VisualToolMode.CLIP_RECT) {
-                    if (visualOverlayEnabled && visualToolMode == VisualToolMode.CLIP_RECT) onVisualOverlayEnabledChange(false)
-                    else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.CLIP_RECT) }
-                }
-                VisualStripIcon(Icons.Filled.Polyline, "矢量 \\clip", visualOverlayEnabled && visualToolMode == VisualToolMode.CLIP_VECTOR) {
-                    if (visualOverlayEnabled && visualToolMode == VisualToolMode.CLIP_VECTOR) onVisualOverlayEnabledChange(false)
-                    else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.CLIP_VECTOR) }
-                }
-                if (zoomScale != 1f || panOffset != Offset.Zero) {
-                    VisualStripIcon(Icons.Filled.ZoomInMap, "重置画面缩放", false) {
-                        zoomScale = 1f; panOffset = Offset.Zero
+            // 左侧 8 工具可视化排版条（手机常规预览模式可隐藏以释放全宽画面）
+            if (showTypesettingStrip) {
+                Column(
+                    Modifier
+                        .width(38.dp)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 3.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    VisualStripIcon(Icons.Filled.AdsClick, "坐标标尺", visualOverlayEnabled && visualToolMode == VisualToolMode.CROSSHAIR) {
+                        if (visualOverlayEnabled && visualToolMode == VisualToolMode.CROSSHAIR) onVisualOverlayEnabledChange(false)
+                        else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.CROSSHAIR) }
+                    }
+                    VisualStripIcon(Icons.Filled.OpenWith, "位置定位", visualOverlayEnabled && visualToolMode == VisualToolMode.POSITION) {
+                        if (visualOverlayEnabled && visualToolMode == VisualToolMode.POSITION) onVisualOverlayEnabledChange(false)
+                        else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.POSITION) }
+                    }
+                    VisualStripIcon(Icons.Filled.Timeline, "移动路径", visualOverlayEnabled && visualToolMode == VisualToolMode.MOVE) {
+                        if (visualOverlayEnabled && visualToolMode == VisualToolMode.MOVE) onVisualOverlayEnabledChange(false)
+                        else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.MOVE) }
+                    }
+                    VisualStripIcon(Icons.AutoMirrored.Filled.RotateRight, "平面旋转", visualOverlayEnabled && visualToolMode == VisualToolMode.ROTATE_Z) {
+                        if (visualOverlayEnabled && visualToolMode == VisualToolMode.ROTATE_Z) onVisualOverlayEnabledChange(false)
+                        else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.ROTATE_Z) }
+                    }
+                    VisualStripIcon(Icons.AutoMirrored.Filled.RotateLeft, "3D透视与原点", visualOverlayEnabled && visualToolMode == VisualToolMode.ROTATE_XY) {
+                        if (visualOverlayEnabled && visualToolMode == VisualToolMode.ROTATE_XY) onVisualOverlayEnabledChange(false)
+                        else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.ROTATE_XY) }
+                    }
+                    VisualStripIcon(Icons.Filled.CropFree, "文字缩放", visualOverlayEnabled && visualToolMode == VisualToolMode.SCALE) {
+                        if (visualOverlayEnabled && visualToolMode == VisualToolMode.SCALE) onVisualOverlayEnabledChange(false)
+                        else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.SCALE) }
+                    }
+                    VisualStripIcon(Icons.Filled.Crop, "矩形裁剪", visualOverlayEnabled && visualToolMode == VisualToolMode.CLIP_RECT) {
+                        if (visualOverlayEnabled && visualToolMode == VisualToolMode.CLIP_RECT) onVisualOverlayEnabledChange(false)
+                        else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.CLIP_RECT) }
+                    }
+                    VisualStripIcon(Icons.Filled.Polyline, "多边形裁剪", visualOverlayEnabled && visualToolMode == VisualToolMode.CLIP_VECTOR) {
+                        if (visualOverlayEnabled && visualToolMode == VisualToolMode.CLIP_VECTOR) onVisualOverlayEnabledChange(false)
+                        else { onVisualOverlayEnabledChange(true); onVisualToolModeChange(VisualToolMode.CLIP_VECTOR) }
+                    }
+                    if (zoomScale != 1f || panOffset != Offset.Zero) {
+                        VisualStripIcon(Icons.Filled.ZoomInMap, "重置画面缩放", false) {
+                            zoomScale = 1f; panOffset = Offset.Zero
+                        }
                     }
                 }
             }
 
-            // 视频居中定比视口（SubtitleOverlay 与 VisualTypesettingOverlay 严格锁死在定比框内部！）
+            // 居中定比视口（鼠标滚轮缩放 + 未开启打字时单击播放/暂停、双击复位缩放）
             BoxWithConstraints(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
                     .clipToBounds()
                     .background(Color.Black)
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val ev = awaitPointerEvent(PointerEventPass.Initial)
+                                if (ev.type == PointerEventType.Scroll) {
+                                    val deltaY = ev.changes.firstOrNull()?.scrollDelta?.y ?: 0f
+                                    if (deltaY != 0f && (ev.keyboardModifiers.isCtrlPressed || !visualOverlayEnabled)) {
+                                        val factor = if (deltaY < 0f) 1.12f else 0.89f
+                                        val nextZoom = (zoomScale * factor).coerceIn(0.5f, 3.0f)
+                                        zoomScale = nextZoom
+                                        if (nextZoom == 1f) panOffset = Offset.Zero
+                                        ev.changes.forEach { it.consume() }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .pointerInput(visualOverlayEnabled, hasMedia) {
+                        if (!visualOverlayEnabled) {
+                            detectTapGestures(
+                                onTap = { if (hasMedia) onPlayPause() },
+                                onDoubleTap = { zoomScale = 1f; panOffset = Offset.Zero },
+                            )
+                        }
+                    }
                     .pointerInput(visualOverlayEnabled) {
                         if (!visualOverlayEnabled) {
                             detectTransformGestures { _, pan, zoom, _ ->
@@ -228,8 +260,7 @@ fun VideoStagePane(
                     if (hasMedia) {
                         PlayerSurface(player = player, modifier = Modifier.fillMaxSize())
                     } else {
-                        // 仿桌面 Aegisub Dummy Video（无片源也可实时预览字幕与打字特效！）
-                        DummyVideoBackdrop(playResX = playResX, playResY = playResY)
+                        DummyVideoBackdrop()
                     }
 
                     SubtitleOverlay(
@@ -270,44 +301,43 @@ fun VideoStagePane(
                     }
                 }
 
-                // 右上角状态与 SGMY HDR 色彩空间徽标
-                Row(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (playback.isHdr || playback.colorInfoLabel.isNotEmpty()) {
-                        Surface(
-                            color = if (playback.isHdr) Color(0xCC7C2D12) else Color(0x991E293B),
-                            shape = MaterialTheme.shapes.extraSmall,
+                // 未加载媒体时，仅在未进入排版且无台词遮挡时居中显示清爽的打开按钮
+                if (!hasMedia && !visualOverlayEnabled && renderInfos.isEmpty()) {
+                    Surface(
+                        color = Color(0xCC1E293B),
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier
+                            .pointerHoverIcon(PointerIcon.Hand)
+                            .clickable(onClick = onPickVideo),
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(
-                                text = playback.colorInfoLabel.ifEmpty { "HDR" },
-                                color = if (playback.isHdr) Color(0xFFFDE68A) else Color(0xFFCBD5E1),
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
-                        }
-                    }
-                    if (!hasMedia) {
-                        Surface(
-                            color = Color(0xB31E293B),
-                            shape = MaterialTheme.shapes.extraSmall,
-                            modifier = Modifier.clickable(onClick = onPickVideo),
-                        ) {
-                            Row(
-                                Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(Icons.Filled.Movie, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(14.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("虚拟画布 ${playResX}×$playResY · 点此挂载视频", color = Color.White, style = MaterialTheme.typography.labelSmall)
-                            }
+                            Icon(Icons.Filled.Movie, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("打开视频或音频", color = Color.White, style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
 
-                // 当处于裁剪或特效打字模式时，底部浮出轻巧快捷辅助条
+                // 右上角 HDR 色彩空间徽标（仅打开真实 HDR/BT.2020 片源时低调呈现）
+                if (hasMedia && (playback.isHdr || playback.colorInfoLabel.isNotEmpty())) {
+                    Surface(
+                        color = if (playback.isHdr) Color(0xCC7C2D12) else Color(0x991E293B),
+                        shape = MaterialTheme.shapes.extraSmall,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+                    ) {
+                        Text(
+                            text = playback.colorInfoLabel.ifEmpty { "HDR" },
+                            color = if (playback.isHdr) Color(0xFFFDE68A) else Color(0xFFCBD5E1),
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+
+                // 处于排版模式时右下角辅助操作胶囊
                 if (visualOverlayEnabled && activeEvent != null) {
                     Surface(
                         color = Color(0xCC0F172A),
@@ -317,16 +347,16 @@ fun VideoStagePane(
                         Row(
                             Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             if (visualToolMode == VisualToolMode.CLIP_RECT || visualToolMode == VisualToolMode.CLIP_VECTOR) {
                                 TextButton(
                                     onClick = { inverseClipToggle = !inverseClipToggle },
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                                     modifier = Modifier.height(26.dp),
                                 ) {
                                     Text(
-                                        if (inverseClipToggle) "\\iclip 反向" else "\\clip 正向",
+                                        if (inverseClipToggle) "反向遮罩" else "正向裁剪",
                                         color = Color(0xFF38BDF8),
                                         style = MaterialTheme.typography.labelSmall,
                                     )
@@ -334,10 +364,10 @@ fun VideoStagePane(
                             }
                             TextButton(
                                 onClick = onClearVisualTags,
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                                 modifier = Modifier.height(26.dp),
                             ) {
-                                Text("清除当前打字标签", color = Color(0xFFFCA5A5), style = MaterialTheme.typography.labelSmall)
+                                Text("重置排版", color = Color(0xFFFCA5A5), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
@@ -345,20 +375,21 @@ fun VideoStagePane(
             }
         }
 
-        // 视频传输与倍速/比例控制条
-        VideoTransportBar(
-            playback = playback,
-            compact = compactControls,
-            showSafeArea = showSafeArea,
-            onToggleSafeArea = { showSafeArea = !showSafeArea },
-            onArOverrideChange = { arOverride = it },
-            onPlayPause = onPlayPause,
-            onPlayLine = onPlayLine,
-            onSeek = onSeek,
-            onFrameBack = onFrameBack,
-            onFrameForward = onFrameForward,
-            onSpeedChange = onSpeedChange,
-        )
+        if (hasMedia || !compactControls) {
+            VideoTransportBar(
+                playback = playback,
+                compact = compactControls,
+                showSafeArea = showSafeArea,
+                onToggleSafeArea = { showSafeArea = !showSafeArea },
+                onArOverrideChange = { arOverride = it },
+                onPlayPause = onPlayPause,
+                onPlayLine = onPlayLine,
+                onSeek = onSeek,
+                onFrameBack = onFrameBack,
+                onFrameForward = onFrameForward,
+                onSpeedChange = onSpeedChange,
+            )
+        }
     }
 }
 
@@ -371,8 +402,11 @@ private fun VisualStripIcon(
 ) {
     Surface(
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-        shape = MaterialTheme.shapes.extraSmall,
-        modifier = Modifier.size(32.dp).clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier
+            .size(32.dp)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .clickable(onClick = onClick),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
@@ -386,7 +420,7 @@ private fun VisualStripIcon(
 }
 
 @Composable
-private fun DummyVideoBackdrop(playResX: Int, playResY: Int) {
+private fun DummyVideoBackdrop() {
     Canvas(Modifier.fillMaxSize()) {
         val cell = (size.minDimension / 14f).coerceAtLeast(12f)
         val cols = (size.width / cell).toInt() + 1
@@ -394,7 +428,7 @@ private fun DummyVideoBackdrop(playResX: Int, playResY: Int) {
         for (r in 0 until rows) {
             for (c in 0 until cols) {
                 drawRect(
-                    color = if ((r + c) % 2 == 0) Color(0xFF1A202C) else Color(0xFF141923),
+                    color = if ((r + c) % 2 == 0) Color(0xFF181E29) else Color(0xFF131822),
                     topLeft = Offset(c * cell, r * cell),
                     size = Size(cell, cell),
                 )
@@ -407,14 +441,12 @@ private fun DummyVideoBackdrop(playResX: Int, playResY: Int) {
 private fun SafeAreaGuideOverlay() {
     Canvas(Modifier.fillMaxSize()) {
         val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
-        // Action Safe 90%
         drawRect(
             color = Color(0x6638BDF8),
             topLeft = Offset(size.width * 0.05f, size.height * 0.05f),
             size = Size(size.width * 0.90f, size.height * 0.90f),
             style = Stroke(width = 1.2f, pathEffect = dash),
         )
-        // Title Safe 80%
         drawRect(
             color = Color(0x66FBBF24),
             topLeft = Offset(size.width * 0.10f, size.height * 0.10f),
@@ -438,7 +470,6 @@ private fun VideoTransportBar(
     onFrameForward: () -> Unit,
     onSpeedChange: (Float) -> Unit,
 ) {
-    // SGMY 0.25x–4.0x 完整倍速档位
     val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f, 4.0f)
     var speedMenu by remember { mutableStateOf(false) }
     var arMenu by remember { mutableStateOf(false) }
@@ -460,26 +491,22 @@ private fun VideoTransportBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                IconButton(onClick = onPlayPause, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onPlayPause, modifier = Modifier.size(34.dp).pointerHoverIcon(PointerIcon.Hand)) {
                     Icon(
                         if (playback.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                         contentDescription = "播放/暂停",
                         modifier = Modifier.size(20.dp),
                     )
                 }
-                IconButton(onClick = onPlayLine, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Filled.PlayCircleOutline, contentDescription = "播放当前行", modifier = Modifier.size(19.dp))
+                IconButton(onClick = onPlayLine, modifier = Modifier.size(34.dp).pointerHoverIcon(PointerIcon.Hand)) {
+                    Icon(Icons.Filled.PlayCircleOutline, contentDescription = "试听当前句", modifier = Modifier.size(19.dp))
                 }
-                TextButton(
-                    onClick = onFrameBack,
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
-                    modifier = Modifier.height(28.dp),
-                ) { Text("◀▏", style = MaterialTheme.typography.labelSmall) }
-                TextButton(
-                    onClick = onFrameForward,
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
-                    modifier = Modifier.height(28.dp),
-                ) { Text("▏▶", style = MaterialTheme.typography.labelSmall) }
+                IconButton(onClick = onFrameBack, modifier = Modifier.size(32.dp).pointerHoverIcon(PointerIcon.Hand)) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "上一帧", modifier = Modifier.size(20.dp))
+                }
+                IconButton(onClick = onFrameForward, modifier = Modifier.size(32.dp).pointerHoverIcon(PointerIcon.Hand)) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "下一帧", modifier = Modifier.size(20.dp))
+                }
 
                 Text(
                     text = "${SubTimeFmt.ass(playback.positionMs)} / ${SubTimeFmt.ass(playback.durationMs)}",
@@ -489,7 +516,7 @@ private fun VideoTransportBar(
 
                 if (!compact) {
                     Text(
-                        text = "#$frameNumber",
+                        text = "帧 $frameNumber",
                         style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(end = 4.dp),
@@ -499,15 +526,15 @@ private fun VideoTransportBar(
                 Box {
                     TextButton(
                         onClick = { speedMenu = true },
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp),
-                        modifier = Modifier.height(28.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp),
+                        modifier = Modifier.height(28.dp).pointerHoverIcon(PointerIcon.Hand),
                     ) {
                         Text("${playback.speed}x", style = MaterialTheme.typography.labelSmall)
                     }
                     DropdownMenu(expanded = speedMenu, onDismissRequest = { speedMenu = false }) {
                         speeds.forEach { r ->
                             DropdownMenuItem(
-                                text = { Text("${r}x 保调倍速") },
+                                text = { Text("${r}× 倍速") },
                                 onClick = { onSpeedChange(r); speedMenu = false },
                             )
                         }
@@ -518,23 +545,23 @@ private fun VideoTransportBar(
                     Box {
                         TextButton(
                             onClick = { arMenu = true },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp),
-                            modifier = Modifier.height(28.dp),
+                            contentPadding = PaddingValues(horizontal = 6.dp),
+                            modifier = Modifier.height(28.dp).pointerHoverIcon(PointerIcon.Hand),
                         ) {
-                            Text("比例", style = MaterialTheme.typography.labelSmall)
+                            Text("画幅比例", style = MaterialTheme.typography.labelSmall)
                         }
                         DropdownMenu(expanded = arMenu, onDismissRequest = { arMenu = false }) {
-                            DropdownMenuItem(text = { Text("自动原生比例") }, onClick = { onArOverrideChange(0f); arMenu = false })
+                            DropdownMenuItem(text = { Text("自动原始比例") }, onClick = { onArOverrideChange(0f); arMenu = false })
                             DropdownMenuItem(text = { Text("16:9 宽屏") }, onClick = { onArOverrideChange(16f / 9f); arMenu = false })
                             DropdownMenuItem(text = { Text("4:3 标准") }, onClick = { onArOverrideChange(4f / 3f); arMenu = false })
                             DropdownMenuItem(text = { Text("2.35:1 电影宽银幕") }, onClick = { onArOverrideChange(2.35f); arMenu = false })
-                            DropdownMenuItem(text = { Text("9:16 竖屏短视频") }, onClick = { onArOverrideChange(9f / 16f); arMenu = false })
+                            DropdownMenuItem(text = { Text("9:16 竖屏") }, onClick = { onArOverrideChange(9f / 16f); arMenu = false })
                         }
                     }
                     TextButton(
                         onClick = onToggleSafeArea,
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp),
-                        modifier = Modifier.height(28.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp),
+                        modifier = Modifier.height(28.dp).pointerHoverIcon(PointerIcon.Hand),
                     ) {
                         Text(if (showSafeArea) "隐藏安全框" else "安全框", style = MaterialTheme.typography.labelSmall)
                     }

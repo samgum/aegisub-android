@@ -27,6 +27,7 @@ interface ProjectRepository {
     suspend fun getContent(id: Long): String
     suspend fun createProject(name: String, format: String, content: String): Long
     suspend fun updateContent(id: Long, content: String, now: Long)
+    suspend fun rename(id: Long, newName: String, now: Long = System.currentTimeMillis()) {}
     suspend fun delete(id: Long)
     suspend fun touchLastOpened(id: Long, now: Long)
     suspend fun getMediaUri(id: Long): String?
@@ -60,6 +61,13 @@ class RoomProjectRepository(
     override suspend fun updateContent(id: Long, content: String, now: Long) {
         val entity = dao.getById(id) ?: return
         dao.update(entity.copy(content = content, updatedAt = now))
+    }
+
+    override suspend fun rename(id: Long, newName: String, now: Long) {
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty()) return
+        val entity = dao.getById(id) ?: return
+        dao.update(entity.copy(name = trimmed, updatedAt = now))
     }
 
     override suspend fun delete(id: Long) = dao.deleteById(id)

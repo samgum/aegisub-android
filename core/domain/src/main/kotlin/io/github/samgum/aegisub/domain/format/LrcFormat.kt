@@ -47,7 +47,7 @@ object LrcFormat : SubtitleFormat {
         if (firstColon <= 0) return null
         val minStr = body.substring(0, firstColon)
         val minutes = minStr.toLongOrNull() ?: return null
-        if (minutes < 0 || minStr.any { !it.isDigit() }) return null
+        if (minutes !in 0L..599L || minStr.any { !it.isDigit() }) return null
 
         val rest = body.substring(firstColon + 1)
         val sepIdx = rest.indexOfFirst { it == '.' || it == ':' }
@@ -151,7 +151,7 @@ object LrcFormat : SubtitleFormat {
             for (ts in timestamps) {
                 val delta = ts - timestamps.first()
                 if (hasSyllables) {
-                    if (syllables.isNotEmpty()) {
+                    if (syllables.any { it.second.isNotBlank() }) {
                         timedLines += ParsedLrcLine(
                             startMs = ts,
                             endMarkerMs = if (endMarkerMs < 0) -1L else endMarkerMs + delta,

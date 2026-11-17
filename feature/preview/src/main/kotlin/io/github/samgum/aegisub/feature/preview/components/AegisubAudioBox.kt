@@ -2,6 +2,7 @@ package io.github.samgum.aegisub.feature.preview.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -21,6 +23,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -39,14 +48,9 @@ import kotlin.math.max
 import kotlin.math.roundToLong
 
 /**
- * 专业级 Aegisub 可缩放音频打轴画布（彻底重做版）：
- * - 支持 **时间窗口缩放**（`2s..60s` 视口，默认 `10s`，告别旧版整部 24 分钟塞满一屏导致无法拖拽的问题！）
- * - 支持 **自动跟随播放头 (`autoScroll`)** 与画布平移
- * - 支持 **波形 / 频谱热图** 同视口无缝渲染
- * - 绘制顶部 **时间标尺**、青色 **关键帧吸附线 (`keyframesMs`)**、前后相邻行幽灵块（直观查看重叠与间隙）
- * - 选中行采用经典桌面 Aegisub **左红起始线 (`Start`) + 右橙结束线 (`End`)** 粗手柄：
- *   拖左线改起始、拖右线改结束、拖中间平移整行、拖空白区平移视口、点按空白区定位播放头！
- * - 开启 `karaokeMode` 时直接在当前行区间内绘制黄色音节切分虚线并支持拖拽音节边界！
+ * 可缩放音频波形 / 频谱打轴画布（触控 + 键鼠全适配）：
+ * - 触控：单指点按定位播放头、拖左红线改起点、拖右橙线改终点、拖底条整句搬移、拖空白平移视口、双指捏合缩放时间窗
+ * - 键鼠：滚轮平移时间轴、`Ctrl/Shift + 滚轮` 缩放时间窗、鼠标右键直设终点（仿桌面 Aegisub）、`Shift + 左键` 直设起点
  *
  * @author 伤感咩吖
  */
@@ -67,6 +71,7 @@ fun AegisubAudioBox(
     onSeek: (Long) -> Unit,
     onCommitTimes: (eventId: Long, newStartMs: Long, newEndMs: Long) -> Unit,
     onCommitKaraokeText: (eventId: Long, newText: String) -> Unit = { _, _ -> },
+    onWindowDurationChange: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val measurer = rememberTextMeasurer()
@@ -78,7 +83,15 @@ fun AegisubAudioBox(
         events.firstOrNull { it.id == selectedEventId }
     }
 
-    // 选中行变化时，若选中行不在当前视口内则自动将视口居中到选中行起始点
+    // 保持最新状态引用，防止手势协程闭包捕获旧视口起点
+    val curWindowStart by rememberUpdatedState(windowStartMs)
+    val curSpan by rememberUpdatedState(visibleSpanMs)
+    val curTotal by rememberUpdatedState(safeTotalMs)
+    val curSelected by rememberUpdatedState(selectedEvent)
+    val curSnap by rememberUpdatedState(snapToKeyframes)
+    val curKeyframes by rememberUpdatedState(keyframesMs)
+    val curKaraokeMode by rememberUpdatedState(karaokeMode)
+
     LaunchedEffect(selectedEventId) {
         selectedEvent?.let { ev ->
             if (ev.start.millis < windowStartMs || ev.start.millis > windowStartMs + visibleSpanMs) {
@@ -87,7 +100,6 @@ fun AegisubAudioBox(
         }
     }
 
-    // 播放时自动滚屏跟随播放头
     LaunchedEffect(positionMs, autoScroll, visibleSpanMs) {
         if (autoScroll) {
             val rightMargin = windowStartMs + (visibleSpanMs * 85 / 100)
@@ -99,47 +111,92 @@ fun AegisubAudioBox(
 
     val handleHitPx = with(LocalDensity.current) { 22.dp.toPx() }
 
-    // 拖拽模式：起始线 / 结束线 / 整句平移 / 卡拉OK音节线 / 视口平移
     var dragKind by remember { mutableStateOf<AudioDragKind?>(null) }
     var liveStartMs by remember { mutableLongStateOf(0L) }
     var liveEndMs by remember { mutableLongStateOf(0L) }
     var liveSyllables by remember { mutableStateOf<List<KaraokeSyllables.Syllable>>(emptyList()) }
     var dragAccumPx by remember { mutableFloatStateOf(0f) }
 
-    val bgDark = Color(0xFF12161F)
-    val rulerBg = Color(0xFF1B2230)
-    val waveIdle = Color(0xFF4ADE80).copy(alpha = 0.62f)
+    val bgDark = Color(0xFF10141C)
+    val rulerBg = Color(0xFF181F2C)
+    val waveIdle = Color(0xFF4ADE80).copy(alpha = 0.58f)
     val waveActive = Color(0xFF86EFAC)
-    val activeShade = Color(0x3838BDF8)
-    val neighborShade = Color(0x2294A3B8)
-    val startLineColor = Color(0xFFFF5252)
-    val endLineColor = Color(0xFFFFAB40)
-    val keyframeColor = Color(0xAAEC4899)
+    val activeShade = Color(0x3338BDF8)
+    val neighborShade = Color(0x2094A3B8)
+    val startLineColor = Color(0xFFEF4444)
+    val endLineColor = Color(0xFFF59E0B)
+    val keyframeColor = Color(0x99EC4899)
     val playheadColor = Color(0xFFFFFFFF)
-    val karaokeLineColor = Color(0xFFFFEA00)
+    val karaokeLineColor = Color(0xFFFACC15)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .background(bgDark)
-            .pointerInput(selectedEvent, visibleSpanMs, windowStartMs, safeTotalMs) {
-                detectTapGestures { offset ->
-                    if (size.width <= 0) return@detectTapGestures
-                    val tappedMs = windowStartMs + ((offset.x / size.width) * visibleSpanMs).roundToLong()
-                    onSeek(tappedMs.coerceIn(0L, safeTotalMs))
+            .pointerHoverIcon(PointerIcon.Crosshair)
+            // 鼠标滚轮平移/缩放 + 鼠标右键设终点 + Shift左键设起点 + 触控双指捏合缩放
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val ev = awaitPointerEvent(PointerEventPass.Initial)
+                        if (size.width <= 0) continue
+
+                        if (ev.type == PointerEventType.Scroll) {
+                            val delta = ev.changes.firstOrNull()?.scrollDelta ?: Offset.Zero
+                            val scrollAmt = if (abs(delta.x) > abs(delta.y)) delta.x else delta.y
+                            if (ev.keyboardModifiers.isCtrlPressed || ev.keyboardModifiers.isShiftPressed) {
+                                val factor = if (scrollAmt > 0f) 1.22f else 0.82f
+                                val nextSpan = (curSpan * factor).roundToLong().coerceIn(2_000L, 60_000L)
+                                onWindowDurationChange(nextSpan)
+                            } else {
+                                val shiftMs = ((scrollAmt * 0.14f) * curSpan).roundToLong()
+                                windowStartMs = (curWindowStart + shiftMs).coerceIn(0L, (curTotal - curSpan).coerceAtLeast(0L))
+                            }
+                            ev.changes.forEach { it.consume() }
+                        } else if (ev.type == PointerEventType.Press) {
+                            val pos = ev.changes.firstOrNull()?.position ?: continue
+                            val clickedMs = (curWindowStart + ((pos.x / size.width) * curSpan).roundToLong()).coerceIn(0L, curTotal)
+                            val targetEv = curSelected
+                            if (ev.buttons.isSecondaryPressed && targetEv != null) {
+                                val snapped = if (curSnap) KeyframesIo.snapToNearest(clickedMs, curKeyframes, 140L) else clickedMs
+                                onCommitTimes(targetEv.id, minOf(targetEv.start.millis, snapped), snapped.coerceAtLeast(targetEv.start.millis + 40L))
+                                ev.changes.forEach { it.consume() }
+                            } else if (ev.keyboardModifiers.isShiftPressed && targetEv != null) {
+                                val snapped = if (curSnap) KeyframesIo.snapToNearest(clickedMs, curKeyframes, 140L) else clickedMs
+                                onCommitTimes(targetEv.id, snapped, maxOf(targetEv.end.millis, snapped + 100L))
+                                ev.changes.forEach { it.consume() }
+                            }
+                        } else if (ev.changes.size >= 2) {
+                            val zoom = ev.calculateZoom()
+                            if (zoom != 1f && zoom > 0.1f) {
+                                val nextSpan = (curSpan / zoom).roundToLong().coerceIn(2_000L, 60_000L)
+                                onWindowDurationChange(nextSpan)
+                                ev.changes.forEach { it.consume() }
+                            }
+                        }
+                    }
                 }
             }
-            .pointerInput(selectedEvent, visibleSpanMs, safeTotalMs, karaokeMode, snapToKeyframes, keyframesMs) {
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    if (size.width <= 0) return@detectTapGestures
+                    val tappedMs = curWindowStart + ((offset.x / size.width) * curSpan).roundToLong()
+                    onSeek(tappedMs.coerceIn(0L, curTotal))
+                }
+            }
+            .pointerInput(Unit) {
                 detectDragGestures(
                     onDragStart = { offset ->
                         if (size.width <= 0) return@detectDragGestures
                         dragAccumPx = 0f
-                        val ev = selectedEvent
+                        val ev = curSelected
+                        val winStart = curWindowStart
+                        val span = curSpan
                         if (ev != null) {
-                            val sX = ((ev.start.millis - windowStartMs).toFloat() / visibleSpanMs) * size.width
-                            val eX = ((ev.end.millis - windowStartMs).toFloat() / visibleSpanMs) * size.width
+                            val sX = ((ev.start.millis - winStart).toFloat() / span) * size.width
+                            val eX = ((ev.end.millis - winStart).toFloat() / span) * size.width
 
-                            if (karaokeMode) {
+                            if (curKaraokeMode) {
                                 val parsed = KaraokeSyllables.parse(ev.text)
                                 if (parsed.size >= 2) {
                                     var accCs = 0L
@@ -147,7 +204,7 @@ fun AegisubAudioBox(
                                     for (b in 0 until parsed.size - 1) {
                                         accCs += parsed[b].centiseconds
                                         val bMs = ev.start.millis + accCs * 10L
-                                        val bX = ((bMs - windowStartMs).toFloat() / visibleSpanMs) * size.width
+                                        val bX = ((bMs - winStart).toFloat() / span) * size.width
                                         if (abs(offset.x - bX) <= handleHitPx) {
                                             hitBoundary = b
                                             break
@@ -186,11 +243,11 @@ fun AegisubAudioBox(
                     onDragEnd = {
                         when (val k = dragKind) {
                             is AudioDragKind.StartHandle -> {
-                                val snapped = if (snapToKeyframes) KeyframesIo.snapToNearest(liveStartMs, keyframesMs, 140L) else liveStartMs
+                                val snapped = if (curSnap) KeyframesIo.snapToNearest(liveStartMs, curKeyframes, 140L) else liveStartMs
                                 onCommitTimes(k.eventId, snapped.coerceIn(0L, liveEndMs), liveEndMs)
                             }
                             is AudioDragKind.EndHandle -> {
-                                val snapped = if (snapToKeyframes) KeyframesIo.snapToNearest(liveEndMs, keyframesMs, 140L) else liveEndMs
+                                val snapped = if (curSnap) KeyframesIo.snapToNearest(liveEndMs, curKeyframes, 140L) else liveEndMs
                                 onCommitTimes(k.eventId, liveStartMs, snapped.coerceAtLeast(liveStartMs))
                             }
                             is AudioDragKind.MoveEvent -> {
@@ -209,23 +266,23 @@ fun AegisubAudioBox(
                 ) { change, dragAmount ->
                     change.consume()
                     if (size.width <= 0) return@detectDragGestures
-                    val deltaMs = ((dragAmount.x / size.width) * visibleSpanMs).roundToLong()
+                    val deltaMs = ((dragAmount.x / size.width) * curSpan).roundToLong()
                     when (val k = dragKind) {
                         is AudioDragKind.StartHandle -> {
                             liveStartMs = (liveStartMs + deltaMs).coerceIn(0L, liveEndMs - 20L)
                         }
                         is AudioDragKind.EndHandle -> {
-                            liveEndMs = (liveEndMs + deltaMs).coerceIn(liveStartMs + 20L, safeTotalMs)
+                            liveEndMs = (liveEndMs + deltaMs).coerceIn(liveStartMs + 20L, curTotal)
                         }
                         is AudioDragKind.MoveEvent -> {
                             val dur = liveEndMs - liveStartMs
-                            val ns = (liveStartMs + deltaMs).coerceIn(0L, (safeTotalMs - dur).coerceAtLeast(0L))
+                            val ns = (liveStartMs + deltaMs).coerceIn(0L, (curTotal - dur).coerceAtLeast(0L))
                             liveStartMs = ns
                             liveEndMs = ns + dur
                         }
                         is AudioDragKind.KaraokeBoundary -> {
                             dragAccumPx += dragAmount.x
-                            val csStepPx = (10f / visibleSpanMs.toFloat()) * size.width
+                            val csStepPx = (10f / curSpan.toFloat()) * size.width
                             if (csStepPx > 0.05f && abs(dragAccumPx) >= csStepPx) {
                                 val deltaCs = (dragAccumPx / csStepPx).toLong()
                                 if (deltaCs != 0L) {
@@ -235,7 +292,7 @@ fun AegisubAudioBox(
                             }
                         }
                         AudioDragKind.PanViewport, null -> {
-                            windowStartMs = (windowStartMs - deltaMs).coerceIn(0L, (safeTotalMs - visibleSpanMs).coerceAtLeast(0L))
+                            windowStartMs = (curWindowStart - deltaMs).coerceIn(0L, (curTotal - curSpan).coerceAtLeast(0L))
                         }
                     }
                 }
@@ -254,7 +311,6 @@ fun AegisubAudioBox(
 
             fun msToX(ms: Long): Float = ((ms - windowStartMs).toFloat() / visibleSpanMs.toFloat()) * w
 
-            // 1. 顶部时间标尺背景与刻度
             drawRect(rulerBg, topLeft = Offset.Zero, size = Size(w, rulerH))
             val tickStepMs = when {
                 visibleSpanMs <= 4_000L -> 500L
@@ -269,7 +325,7 @@ fun AegisubAudioBox(
                 if (tMs >= windowStartMs) {
                     val tx = msToX(tMs)
                     drawLine(Color(0xFF475569), Offset(tx, rulerH * 0.55f), Offset(tx, rulerH), strokeWidth = 1f)
-                    drawLine(Color(0x1894A3B8), Offset(tx, bodyTop), Offset(tx, h), strokeWidth = 1f)
+                    drawLine(Color(0x1694A3B8), Offset(tx, bodyTop), Offset(tx, h), strokeWidth = 1f)
                     val sec = tMs / 1000
                     val tenth = (tMs % 1000) / 100
                     val txt = "%d:%02d.%d".format(sec / 60, sec % 60, tenth)
@@ -281,7 +337,6 @@ fun AegisubAudioBox(
                 tMs += tickStepMs
             }
 
-            // 2. 频谱或波形绘制（仅截取当前视口区间 [windowStartMs, windowEndMs] 高刷切片）
             if (showSpectrogram && spectrogram != null && spectrogram.frames.isNotEmpty()) {
                 val frames = spectrogram.frames
                 val totalDur = max(spectrogram.durationMs, safeTotalMs).toFloat()
@@ -305,7 +360,6 @@ fun AegisubAudioBox(
                     }
                 }
             } else {
-                // 中心零电平线
                 drawLine(Color(0x3364748B), Offset(0f, midY), Offset(w, midY), strokeWidth = 1f)
                 val peaks = waveform?.peaks
                 if (peaks != null && peaks.isNotEmpty()) {
@@ -338,7 +392,6 @@ fun AegisubAudioBox(
                 }
             }
 
-            // 3. 关键帧竖线（青粉色虚线）
             if (keyframesMs.isNotEmpty()) {
                 val kfDash = PathEffect.dashPathEffect(floatArrayOf(6f, 5f), 0f)
                 for (kf in keyframesMs) {
@@ -349,7 +402,6 @@ fun AegisubAudioBox(
                 }
             }
 
-            // 4. 邻近字幕行阴影带 + 当前选中行 Aegisub 起始红线/结束橙线
             events.forEach { ev ->
                 if (ev.comment) return@forEach
                 val isSel = ev.id == selectedEventId
@@ -363,16 +415,12 @@ fun AegisubAudioBox(
 
                 if (isSel) {
                     drawRect(activeShade, topLeft = Offset(left, bodyTop), size = Size(boxW, bodyH))
-                    // 底部拖拽搬移带
-                    drawRect(Color(0x5538BDF8), topLeft = Offset(left, h - 14.dp.toPx()), size = Size(boxW, 14.dp.toPx()))
-                    // 左红起始手柄线 + 顶部三角翼
-                    drawLine(startLineColor, Offset(left, bodyTop), Offset(left, h), strokeWidth = 3.2f)
+                    drawRect(Color(0x4D38BDF8), topLeft = Offset(left, h - 14.dp.toPx()), size = Size(boxW, 14.dp.toPx()))
+                    drawLine(startLineColor, Offset(left, bodyTop), Offset(left, h), strokeWidth = 3f)
                     drawRect(startLineColor, topLeft = Offset(left, bodyTop), size = Size(8.dp.toPx(), 12.dp.toPx()))
-                    // 右橙结束手柄线 + 顶部三角翼
-                    drawLine(endLineColor, Offset(right, bodyTop), Offset(right, h), strokeWidth = 3.2f)
+                    drawLine(endLineColor, Offset(right, bodyTop), Offset(right, h), strokeWidth = 3f)
                     drawRect(endLineColor, topLeft = Offset(right - 8.dp.toPx(), bodyTop), size = Size(8.dp.toPx(), 12.dp.toPx()))
 
-                    // 卡拉OK音节切分线
                     if (karaokeMode) {
                         val syls = if (dragKind is AudioDragKind.KaraokeBoundary && liveSyllables.isNotEmpty()) {
                             liveSyllables
@@ -400,15 +448,14 @@ fun AegisubAudioBox(
                     }
                 } else {
                     drawRect(neighborShade, topLeft = Offset(left, h - 18.dp.toPx()), size = Size(boxW, 18.dp.toPx()))
-                    drawRect(Color(0x5594A3B8), topLeft = Offset(left, h - 18.dp.toPx()), size = Size(boxW, 18.dp.toPx()), style = Stroke(width = 1f))
+                    drawRect(Color(0x4494A3B8), topLeft = Offset(left, h - 18.dp.toPx()), size = Size(boxW, 18.dp.toPx()), style = Stroke(width = 1f))
                 }
             }
 
-            // 5. 白色实时播放头
             if (positionMs in windowStartMs..windowEndMs) {
                 val px = msToX(positionMs)
-                drawLine(playheadColor, Offset(px, 0f), Offset(px, h), strokeWidth = 2.2f)
-                drawCircle(playheadColor, radius = 4.5f, center = Offset(px, rulerH / 2f))
+                drawLine(playheadColor, Offset(px, 0f), Offset(px, h), strokeWidth = 2f)
+                drawCircle(playheadColor, radius = 4f, center = Offset(px, rulerH / 2f))
             }
         }
     }

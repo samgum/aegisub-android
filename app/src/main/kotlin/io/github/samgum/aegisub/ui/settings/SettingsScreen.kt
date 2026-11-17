@@ -109,14 +109,14 @@ fun SettingsScreen(
             }
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            SectionTitle("SGMY 增强与视频预览")
-            SwitchRow("实时高亮超出视频画幅的溢出字幕 (SGMY Overflow)", s.highlightOverflow) {
+            SectionTitle("画面校对与视频预览")
+            SwitchRow("实时标记超出视频画幅的字幕行", s.highlightOverflow) {
                 viewModel.setHighlightOverflow(it)
             }
-            SwitchRow("4K HDR / 杜比视界 1080p 预览降采样提速 (SGMY HDR)", s.hdrPreviewOptimize) {
+            SwitchRow("4K HDR 视频预览降采样至 1080p（提升流畅度）", s.hdrPreviewOptimize) {
                 viewModel.setHdrPreviewOptimize(it)
             }
-            SwitchRow("编辑框显示 SGMY ✨ AI 分析入口按钮", s.aiEnabled) {
+            SwitchRow("在编辑框显示 AI 字幕助手按钮", s.aiEnabled) {
                 viewModel.setAiEnabled(it)
             }
             Row(
@@ -286,9 +286,9 @@ private fun HotkeyAction.label(): String = when (this) {
     HotkeyAction.SET_END_TO_POS -> "设结束时间到当前画面"
     HotkeyAction.ADD_LEAD_IN -> "添加前导 Lead-In"
     HotkeyAction.ADD_LEAD_OUT -> "添加后导 Lead-Out"
-    HotkeyAction.FIX_COMMON_ERRORS -> "SGMY 修复常见错误"
-    HotkeyAction.LYRIC_SCROLL -> "SGMY 音乐滚动歌词生成"
-    HotkeyAction.CYCLE_TAG_HIDING -> "切换网格标签隐藏模式 (☼)"
+    HotkeyAction.FIX_COMMON_ERRORS -> "修复常见错误"
+    HotkeyAction.LYRIC_SCROLL -> "滚动歌词生成器"
+    HotkeyAction.CYCLE_TAG_HIDING -> "切换网格标签显示"
 }
 
 @Composable

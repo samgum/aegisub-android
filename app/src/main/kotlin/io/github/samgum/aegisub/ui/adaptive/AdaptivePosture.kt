@@ -4,15 +4,19 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import io.github.samgum.aegisub.data.settings.LayoutMode
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 
 /**
  * 设备与折叠屏自适应姿态模型（基于 Jetpack WindowManager [WindowInfoTracker] + [FoldingFeature]）：
@@ -128,19 +132,18 @@ fun rememberAdaptiveWindowState(layoutMode: LayoutMode): AdaptiveWindowState {
     val density = LocalDensity.current.density
     val activity = context.findActivity()
 
-    val foldFeatureState = produceState<FoldingFeature?>(initialValue = null, activity) {
+    val foldFlow = remember(activity) {
         if (activity == null) {
-            value = null
-            return@produceState
+            flowOf(null)
+        } else {
+            WindowInfoTracker.getOrCreate(activity)
+                .windowLayoutInfo(activity)
+                .map { layoutInfo ->
+                    layoutInfo.displayFeatures.filterIsInstance<FoldingFeature>().firstOrNull()
+                }
         }
-        WindowInfoTracker.getOrCreate(activity)
-            .windowLayoutInfo(activity)
-            .collect { layoutInfo ->
-                value = layoutInfo.displayFeatures.filterIsInstance<FoldingFeature>().firstOrNull()
-            }
     }
-
-    val fold = foldFeatureState.value
+    val fold by foldFlow.collectAsStateWithLifecycle(initialValue = null)
     return resolveWorkspacePosture(
         widthDp = config.screenWidthDp,
         heightDp = config.screenHeightDp,

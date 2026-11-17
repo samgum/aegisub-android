@@ -33,7 +33,7 @@ import javax.inject.Inject
  *
  * @author 伤感咩吖
  */
-@OptIn(UnstableApi::class)
+@androidx.annotation.OptIn(UnstableApi::class)
 class Media3VideoPlayer @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : VideoPlayer {

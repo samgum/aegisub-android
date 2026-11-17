@@ -326,22 +326,23 @@ private fun ExportFormatDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("导出转换字幕与歌词") },
+        title = { Text("导出字幕与歌词") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 FormatRegistry.formats.forEach { fmt ->
-                    val desc = when (fmt.name) {
-                        "ASS" -> "Advanced SubStation Alpha（全特效、样式、卡拉OK无损）"
-                        "SSA" -> "SubStation Alpha v4.00 兼容格式"
-                        "SRT" -> "SubRip 通用视频字幕 (.srt)"
-                        "VTT" -> "WebVTT 网页 HTML5 字幕 (.vtt)"
-                        "TTML" -> "TTML / DFXP 苹果音乐与流媒体时间文本（含逐词 span）"
-                        "LRC" -> "LRC 音乐歌词（含 SGMY 增强型 <mm:ss.xx> 逐字卡拉OK）"
-                        "SUB" -> "MicroDVD 帧号字幕 (.sub)"
-                        else -> "纯文本台词稿 (.txt)"
+                    val ext = fmt.extensions.firstOrNull() ?: ".ass"
+                    val desc = when (fmt.name.lowercase()) {
+                        "ass" -> "Advanced SubStation Alpha（完整保留样式、排版与卡拉OK）"
+                        "ssa" -> "SubStation Alpha v4.00 兼容格式"
+                        "srt" -> "SubRip 通用视频字幕"
+                        "vtt" -> "WebVTT 网页字幕"
+                        "ttml" -> "TTML / Apple Music 逐词时间文本"
+                        "lrc" -> "LRC 音乐歌词（支持逐字卡拉OK标签）"
+                        "sub" -> "MicroDVD 帧号字幕"
+                        else -> "纯文本台词稿"
                     }
                     ListItem(
-                        headlineContent = { Text("${fmt.name} (.${fmt.extensions.first()})") },
+                        headlineContent = { Text("${fmt.name.uppercase()} ($ext)") },
                         supportingContent = { Text(desc, style = MaterialTheme.typography.bodySmall) },
                         modifier = Modifier.clickable { onPick(fmt) },
                     )

@@ -22,6 +22,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontFamily
@@ -116,6 +120,19 @@ fun VisualTypesettingOverlay(
         modifier = modifier
             .fillMaxSize()
             .onSizeChanged { boxSize = it }
+            .pointerHoverIcon(PointerIcon.Crosshair)
+            .pointerInput(playResX, playResY) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val ev = awaitPointerEvent(PointerEventPass.Main)
+                        if (ev.type == PointerEventType.Move) {
+                            ev.changes.firstOrNull()?.position?.let { pos ->
+                                hoverCoord = project(pos, boxSize, playResX, playResY)
+                            }
+                        }
+                    }
+                }
+            }
             .pointerInput(playResX, playResY, mode, liveVecPoints, currentVectorClip) {
                 detectTapGestures { tapOffset ->
                     val pt = project(tapOffset, boxSize, playResX, playResY)
@@ -358,15 +375,15 @@ fun VisualTypesettingOverlay(
         val hudText = when (mode) {
             VisualToolMode.CROSSHAIR -> {
                 val c = hoverCoord ?: livePos
-                "十字探针 (${c.first}, ${c.second}) · 点按设 \\pos"
+                "(${c.first}, ${c.second})"
             }
-            VisualToolMode.POSITION -> "\\pos(${livePos.first}, ${livePos.second})"
-            VisualToolMode.MOVE -> "\\move(${liveA.first},${liveA.second} → ${liveB.first},${liveB.second})"
-            VisualToolMode.ROTATE_Z -> "\\frz$liveFrz°"
-            VisualToolMode.ROTATE_XY -> "\\frx$liveFrx° \\fry$liveFry° · \\org(${liveOrg.first},${liveOrg.second})"
-            VisualToolMode.SCALE -> "\\fscx$liveScaleX% \\fscy$liveScaleY%"
-            VisualToolMode.CLIP_RECT -> "\\clip(${minOf(liveClipA.first, liveClipB.first)},${minOf(liveClipA.second, liveClipB.second)},${maxOf(liveClipA.first, liveClipB.first)},${maxOf(liveClipA.second, liveClipB.second)})"
-            VisualToolMode.CLIP_VECTOR -> "矢量裁剪：${liveVecPoints.size} 顶点（点画面加点 / 拖顶点移动）"
+            VisualToolMode.POSITION -> "位置 (${livePos.first}, ${livePos.second})"
+            VisualToolMode.MOVE -> "移动 (${liveA.first}, ${liveA.second}) → (${liveB.first}, ${liveB.second})"
+            VisualToolMode.ROTATE_Z -> "旋转 ${liveFrz}°"
+            VisualToolMode.ROTATE_XY -> "3D (${liveFrx}°, ${liveFry}°) · 原点 (${liveOrg.first}, ${liveOrg.second})"
+            VisualToolMode.SCALE -> "缩放 ${liveScaleX}% × ${liveScaleY}%"
+            VisualToolMode.CLIP_RECT -> "裁剪 (${minOf(liveClipA.first, liveClipB.first)}, ${minOf(liveClipA.second, liveClipB.second)}) – (${maxOf(liveClipA.first, liveClipB.first)}, ${maxOf(liveClipA.second, liveClipB.second)})"
+            VisualToolMode.CLIP_VECTOR -> "多边形裁剪 · ${liveVecPoints.size} 顶点"
         }
         Surface(
             color = Color(0xB8101418),

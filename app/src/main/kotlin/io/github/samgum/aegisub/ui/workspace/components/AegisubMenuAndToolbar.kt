@@ -1,10 +1,12 @@
 package io.github.samgum.aegisub.ui.workspace.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,10 +15,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoFixHigh
@@ -26,7 +30,6 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FindReplace
 import androidx.compose.material.icons.filled.FontDownload
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
@@ -39,14 +42,17 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +61,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,7 +72,7 @@ import io.github.samgum.aegisub.ui.adaptive.AdaptiveWindowState
 import io.github.samgum.aegisub.ui.workspace.WorkspaceDisplayPreset
 
 /**
- * 统一工作台动作路由枚举（覆盖桌面 `samgum/Aegisub` 全部菜单与工具栏动作）。
+ * 统一工作台动作路由枚举。
  *
  * @author 伤感咩吖
  */
@@ -86,7 +95,6 @@ enum class WorkspaceDialogType {
     STYLING_ASSISTANT,
     TRANSLATION_ASSISTANT,
     KARAOKE_GENERATOR,
-    // SGMY 独家功能弹窗
     SGMY_FIX_COMMON_ERRORS,
     SGMY_LYRIC_SCROLL,
     SGMY_CHINESE_CONVERT,
@@ -99,7 +107,7 @@ enum class WorkspaceDialogType {
 }
 
 /**
- * 桌面级顶栏菜单条 + 图标工具栏（平板 / 折叠全展 / DeX 使用完整菜单栏+图标条，手机使用紧凑单行顶栏+全菜单抽屉）。
+ * 平板 / 折叠全展 / DeX 桌面级菜单栏与快捷图标栏（自然中文命名 + 右对齐快捷键提示 + 鼠标手型光标）。
  */
 @Composable
 fun DesktopMenuAndToolbar(
@@ -142,19 +150,19 @@ fun DesktopMenuAndToolbar(
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 2.dp,
+        tonalElevation = 1.dp,
     ) {
         Column(Modifier.fillMaxWidth()) {
-            // 第一行：经典 Aegisub 桌面菜单栏（File / Edit / Subtitle / Timing / Video / Audio / SGMY Tools / View / Help）
+            // 第一行：桌面菜单栏（简洁无冗余字母括号，快捷键右对齐显示）
             Row(
                 Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onBack, modifier = Modifier.size(34.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回项目列表", modifier = Modifier.size(18.dp))
+                IconButton(onClick = onBack, modifier = Modifier.size(34.dp).pointerHoverIcon(PointerIcon.Hand)) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", modifier = Modifier.size(18.dp))
                 }
                 Text(
                     text = projectName,
@@ -163,179 +171,171 @@ fun DesktopMenuAndToolbar(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(horizontal = 6.dp),
                 )
-                VerticalDivider(Modifier.height(18.dp).padding(horizontal = 4.dp))
+                VerticalDivider(Modifier.height(16.dp).padding(horizontal = 4.dp))
 
-                MenuDropdownButton("文件(F)") { dismiss ->
-                    DropdownMenuItem(text = { Text("保存历史快照") }, onClick = { dismiss(); onQuickSnapshot() })
-                    DropdownMenuItem(text = { Text("历史快照管理…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.HISTORY_SNAPSHOTS) })
-                    DropdownMenuItem(text = { Text("导出转换字幕 (ASS/SRT/VTT/TTML/LRC)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.EXPORT) })
+                MenuDropdownButton("文件") { dismiss ->
+                    ShortcutMenuItem("保存快照", "Ctrl+S") { dismiss(); onQuickSnapshot() }
+                    ShortcutMenuItem("历史版本管理…") { dismiss(); onOpenDialog(WorkspaceDialogType.HISTORY_SNAPSHOTS) }
+                    ShortcutMenuItem("导出字幕与歌词…", "Ctrl+E") { dismiss(); onOpenDialog(WorkspaceDialogType.EXPORT) }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("脚本属性 (Script Info)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.PROPERTIES) })
-                    DropdownMenuItem(text = { Text("字体检查与收集 (Fonts Collector)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.FONTS_COLLECTOR) })
+                    ShortcutMenuItem("脚本属性…") { dismiss(); onOpenDialog(WorkspaceDialogType.PROPERTIES) }
+                    ShortcutMenuItem("字体使用检查…") { dismiss(); onOpenDialog(WorkspaceDialogType.FONTS_COLLECTOR) }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("返回工程列表") }, onClick = { dismiss(); onBack() })
+                    ShortcutMenuItem("返回工程列表") { dismiss(); onBack() }
                 }
 
-                MenuDropdownButton("编辑(E)") { dismiss ->
-                    DropdownMenuItem(text = { Text("撤销 (Ctrl+Z)") }, enabled = canUndo, onClick = { dismiss(); onUndo() })
-                    DropdownMenuItem(text = { Text("重做 (Ctrl+Y)") }, enabled = canRedo, onClick = { dismiss(); onRedo() })
+                MenuDropdownButton("编辑") { dismiss ->
+                    ShortcutMenuItem("撤销", "Ctrl+Z", enabled = canUndo) { dismiss(); onUndo() }
+                    ShortcutMenuItem("重做", "Ctrl+Y", enabled = canRedo) { dismiss(); onRedo() }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("复制选中行") }, onClick = { dismiss(); onCopyLines() })
-                    DropdownMenuItem(text = { Text("粘贴行") }, onClick = { dismiss(); onPasteLines() })
-                    DropdownMenuItem(text = { Text("粘贴覆盖 (Paste Over)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.PASTE_OVER) })
+                    ShortcutMenuItem("复制选中行", "Ctrl+Shift+C") { dismiss(); onCopyLines() }
+                    ShortcutMenuItem("粘贴字幕行", "Ctrl+Shift+V") { dismiss(); onPasteLines() }
+                    ShortcutMenuItem("粘贴覆盖文本…") { dismiss(); onOpenDialog(WorkspaceDialogType.PASTE_OVER) }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("查找与替换 (Ctrl+F)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.FIND_REPLACE) })
+                    ShortcutMenuItem("查找与替换…", "Ctrl+F") { dismiss(); onOpenDialog(WorkspaceDialogType.FIND_REPLACE) }
                 }
 
-                MenuDropdownButton("字幕(S)") { dismiss ->
-                    DropdownMenuItem(text = { Text("样式管理器 (Styles Manager)…") }, onClick = { dismiss(); onOpenStyleManager() })
-                    DropdownMenuItem(text = { Text("样式助手 (Styling Assistant)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.STYLING_ASSISTANT) })
-                    DropdownMenuItem(text = { Text("翻译助手 (Translation Assistant)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.TRANSLATION_ASSISTANT) })
-                    DropdownMenuItem(text = { Text("样式批量替换…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.STYLE_REPLACE) })
-                    DropdownMenuItem(text = { Text("分辨率重采样 (Resample Resolution)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.RESAMPLE_RESOLUTION) })
+                MenuDropdownButton("字幕") { dismiss ->
+                    ShortcutMenuItem("样式管理器…") { dismiss(); onOpenStyleManager() }
+                    ShortcutMenuItem("样式助手…") { dismiss(); onOpenDialog(WorkspaceDialogType.STYLING_ASSISTANT) }
+                    ShortcutMenuItem("翻译助手…") { dismiss(); onOpenDialog(WorkspaceDialogType.TRANSLATION_ASSISTANT) }
+                    ShortcutMenuItem("批量替换样式…") { dismiss(); onOpenDialog(WorkspaceDialogType.STYLE_REPLACE) }
+                    ShortcutMenuItem("分辨率重采样…") { dismiss(); onOpenDialog(WorkspaceDialogType.RESAMPLE_RESOLUTION) }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("前插新行") }, onClick = { dismiss(); onInsertBefore() })
-                    DropdownMenuItem(text = { Text("后插新行") }, onClick = { dismiss(); onInsertAfter() })
-                    DropdownMenuItem(text = { Text("复制当前/选中行") }, onClick = { dismiss(); onDuplicateLines() })
-                    DropdownMenuItem(text = { Text("分割当前行") }, onClick = { dismiss(); onSplitLine() })
-                    DropdownMenuItem(text = { Text("按卡拉OK音节拆分为多行") }, onClick = { dismiss(); onSplitByKaraoke() })
+                    ShortcutMenuItem("在上方插入行", "Ctrl+I") { dismiss(); onInsertBefore() }
+                    ShortcutMenuItem("在下方插入行", "Ctrl+Shift+I") { dismiss(); onInsertAfter() }
+                    ShortcutMenuItem("复制行", "Ctrl+D") { dismiss(); onDuplicateLines() }
+                    ShortcutMenuItem("分割当前行", "Ctrl+Shift+K") { dismiss(); onSplitLine() }
+                    ShortcutMenuItem("按卡拉OK音节拆分") { dismiss(); onSplitByKaraoke() }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("合并行（拼接文本）") }, onClick = { dismiss(); onJoinConcat() })
-                    DropdownMenuItem(text = { Text("合并行（保留首句）") }, onClick = { dismiss(); onJoinKeepFirst() })
-                    DropdownMenuItem(text = { Text("合并行（转为卡拉OK \\k）") }, onClick = { dismiss(); onJoinKaraoke() })
-                    DropdownMenuItem(text = { Text("双行交叉重组 (Recombine)") }, onClick = { dismiss(); onRecombine() })
+                    ShortcutMenuItem("合并行（拼接文本）", "Ctrl+Shift+J") { dismiss(); onJoinConcat() }
+                    ShortcutMenuItem("合并行（保留首句）", "Ctrl+J") { dismiss(); onJoinKeepFirst() }
+                    ShortcutMenuItem("合并为卡拉OK") { dismiss(); onJoinKaraoke() }
+                    ShortcutMenuItem("双行交叉重组") { dismiss(); onRecombine() }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("排序字幕行…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.SORT_LINES) })
-                    DropdownMenuItem(text = { Text("按条件选择行 (Select Lines)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.SELECT_LINES) })
-                    DropdownMenuItem(text = { Text("全选所有行") }, onClick = { dismiss(); onSelectAll() })
-                    DropdownMenuItem(text = { Text("删除空白行") }, onClick = { dismiss(); onDeleteEmpty() })
+                    ShortcutMenuItem("排序字幕行…") { dismiss(); onOpenDialog(WorkspaceDialogType.SORT_LINES) }
+                    ShortcutMenuItem("按条件选择行…") { dismiss(); onOpenDialog(WorkspaceDialogType.SELECT_LINES) }
+                    ShortcutMenuItem("全选所有行", "Ctrl+Shift+A") { dismiss(); onSelectAll() }
+                    ShortcutMenuItem("删除空白行") { dismiss(); onDeleteEmpty() }
                 }
 
-                MenuDropdownButton("时间轴(T)") { dismiss ->
-                    DropdownMenuItem(text = { Text("平移时间 (Shift Times)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.SHIFT_TIMES) })
-                    DropdownMenuItem(text = { Text("时间后处理 (去重叠 / 前后导)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.TIMING_POST_PROCESS) })
-                    DropdownMenuItem(text = { Text("帧率转换 (Change Framerate)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.FRAMERATE_CONVERT) })
-                    DropdownMenuItem(text = { Text("汉字卡拉OK计时器 (Kanji Timer)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.KANJI_TIMER) })
-                    DropdownMenuItem(text = { Text("生成卡拉OK音节 (\\k / \\kf)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.KARAOKE_GENERATOR) })
+                MenuDropdownButton("时间轴") { dismiss ->
+                    ShortcutMenuItem("平移时间…") { dismiss(); onOpenDialog(WorkspaceDialogType.SHIFT_TIMES) }
+                    ShortcutMenuItem("时间后处理（前后导 / 去重叠）…") { dismiss(); onOpenDialog(WorkspaceDialogType.TIMING_POST_PROCESS) }
+                    ShortcutMenuItem("时间缝合器…") { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_STITCH_TIMINGS) }
+                    ShortcutMenuItem("同样式重叠检查…") { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_STYLE_OVERLAP) }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("使时间连续（修改结束时间）") }, onClick = { dismiss(); onMakeContinuousEnd() })
-                    DropdownMenuItem(text = { Text("使时间连续（修改开始时间）") }, onClick = { dismiss(); onMakeContinuousStart() })
+                    ShortcutMenuItem("使时间连续（延长前句结束）") { dismiss(); onMakeContinuousEnd() }
+                    ShortcutMenuItem("使时间连续（提前下句开始）") { dismiss(); onMakeContinuousStart() }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("书签管理 (Bookmarks)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.BOOKMARKS) })
+                    ShortcutMenuItem("帧率转换…") { dismiss(); onOpenDialog(WorkspaceDialogType.FRAMERATE_CONVERT) }
+                    ShortcutMenuItem("生成卡拉OK音节…") { dismiss(); onOpenDialog(WorkspaceDialogType.KARAOKE_GENERATOR) }
+                    ShortcutMenuItem("汉字卡拉OK计时复制…") { dismiss(); onOpenDialog(WorkspaceDialogType.KANJI_TIMER) }
+                    ShortcutMenuItem("时间书签…") { dismiss(); onOpenDialog(WorkspaceDialogType.BOOKMARKS) }
                 }
 
-                MenuDropdownButton("视频/音频(V)") { dismiss ->
-                    DropdownMenuItem(text = { Text("打开/更换视频或音频文件…") }, onClick = { dismiss(); onPickVideo() })
+                MenuDropdownButton("音视频") { dismiss ->
+                    ShortcutMenuItem("打开视频或音频文件…") { dismiss(); onPickVideo() }
                     if (hasMedia) {
-                        DropdownMenuItem(text = { Text("关闭当前媒体") }, onClick = { dismiss(); onCloseVideo() })
+                        ShortcutMenuItem("关闭当前媒体") { dismiss(); onCloseVideo() }
                     }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("导入关键帧文件 (# keyframe v1)…") }, onClick = { dismiss(); onImportKeyframes() })
-                    DropdownMenuItem(text = { Text("导出当前关键帧文件…") }, onClick = { dismiss(); onExportKeyframes() })
+                    ShortcutMenuItem("导入关键帧文件…") { dismiss(); onImportKeyframes() }
+                    ShortcutMenuItem("导出关键帧文件…") { dismiss(); onExportKeyframes() }
                 }
 
-                MenuDropdownButton("SGMY工具(G)") { dismiss ->
-                    DropdownMenuItem(
-                        text = { Text("⚡ 修复常见错误 (Fix Common Errors)…", fontWeight = FontWeight.SemiBold) },
-                        onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_FIX_COMMON_ERRORS) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("🎵 音乐滚动歌词生成器 (Lyric Scroll)…", fontWeight = FontWeight.SemiBold) },
-                        onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_LYRIC_SCROLL) },
-                    )
+                MenuDropdownButton("工具") { dismiss ->
+                    ShortcutMenuItem("修复常见错误…", "Ctrl+Shift+F") { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_FIX_COMMON_ERRORS) }
+                    ShortcutMenuItem("滚动歌词生成器…", "Ctrl+Shift+L") { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_LYRIC_SCROLL) }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("简繁中文互转 (ICU)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_CHINESE_CONVERT) })
-                    DropdownMenuItem(text = { Text("字幕文本清理（标点/双空格）…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_TEXT_CLEANUP) })
-                    DropdownMenuItem(text = { Text("配对标点符号检查…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_PAIR_CHECK) })
-                    DropdownMenuItem(text = { Text("日语汉字假名注音 (Furigana)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_FURIGANA) })
+                    ShortcutMenuItem("简繁中文转换…") { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_CHINESE_CONVERT) }
+                    ShortcutMenuItem("字幕文本清理…") { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_TEXT_CLEANUP) }
+                    ShortcutMenuItem("配对标点检查…") { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_PAIR_CHECK) }
+                    ShortcutMenuItem("日语假名注音…") { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_FURIGANA) }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("时间缝合器 (Stitch Timings)…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_STITCH_TIMINGS) })
-                    DropdownMenuItem(text = { Text("同样式时间重叠检查…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_STYLE_OVERLAP) })
-                    HorizontalDivider()
-                    DropdownMenuItem(text = { Text("✨ AI 字幕语法分析与润色…") }, onClick = { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_AI_ANALYSIS) })
+                    ShortcutMenuItem("AI 字幕分析与翻译…") { dismiss(); onOpenDialog(WorkspaceDialogType.SGMY_AI_ANALYSIS) }
                 }
 
-                MenuDropdownButton("视图(W)") { dismiss ->
-                    DropdownMenuItem(text = { Text("完整视图（视频+音频+字幕）") }, onClick = { dismiss(); onSetDisplayPreset(WorkspaceDisplayPreset.FULL) })
-                    DropdownMenuItem(text = { Text("视频 + 字幕视图") }, onClick = { dismiss(); onSetDisplayPreset(WorkspaceDisplayPreset.VIDEO_SUBS) })
-                    DropdownMenuItem(text = { Text("音频打轴 + 字幕视图") }, onClick = { dismiss(); onSetDisplayPreset(WorkspaceDisplayPreset.AUDIO_SUBS) })
-                    DropdownMenuItem(text = { Text("纯字幕专注视图") }, onClick = { dismiss(); onSetDisplayPreset(WorkspaceDisplayPreset.SUBS_ONLY) })
+                MenuDropdownButton("视图") { dismiss ->
+                    ShortcutMenuItem(if (displayPreset == WorkspaceDisplayPreset.FULL) "✓ 完整工作台" else "完整工作台") {
+                        dismiss(); onSetDisplayPreset(WorkspaceDisplayPreset.FULL)
+                    }
+                    ShortcutMenuItem(if (displayPreset == WorkspaceDisplayPreset.VIDEO_SUBS) "✓ 视频 + 字幕" else "视频 + 字幕") {
+                        dismiss(); onSetDisplayPreset(WorkspaceDisplayPreset.VIDEO_SUBS)
+                    }
+                    ShortcutMenuItem(if (displayPreset == WorkspaceDisplayPreset.AUDIO_SUBS) "✓ 音频 + 字幕" else "音频 + 字幕") {
+                        dismiss(); onSetDisplayPreset(WorkspaceDisplayPreset.AUDIO_SUBS)
+                    }
+                    ShortcutMenuItem(if (displayPreset == WorkspaceDisplayPreset.SUBS_ONLY) "✓ 仅字幕列表" else "仅字幕列表") {
+                        dismiss(); onSetDisplayPreset(WorkspaceDisplayPreset.SUBS_ONLY)
+                    }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("切换网格标签隐藏模式 (☼)") }, onClick = { dismiss(); onCycleTagMode() })
-                    DropdownMenuItem(text = { Text("全局偏好与热键设置…") }, onClick = { dismiss(); onOpenSettings() })
-                    DropdownMenuItem(text = { Text("关于 Aegisub SGMY…") }, onClick = { dismiss(); onOpenAbout() })
-                }
-
-                Spacer(Modifier.weight(1f))
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = MaterialTheme.shapes.extraSmall,
-                    modifier = Modifier.padding(end = 8.dp),
-                ) {
-                    Text(
-                        adaptiveState.postureBadge,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    )
+                    ShortcutMenuItem("切换网格标签显示", "Ctrl+Shift+T") { dismiss(); onCycleTagMode() }
+                    ShortcutMenuItem("偏好与热键设置…") { dismiss(); onOpenSettings() }
+                    ShortcutMenuItem("关于 Aegisub…") { dismiss(); onOpenAbout() }
                 }
             }
 
             HorizontalDivider()
 
-            // 第二行：桌面 Aegisub 快捷图标工具栏（含 SGMY 修复常见错误与滚动歌词按钮）
+            // 第二行：清爽的快捷图标工具条
             Row(
                 Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                ToolbarIconBtn(Icons.Filled.History, "历史快照") { onOpenDialog(WorkspaceDialogType.HISTORY_SNAPSHOTS) }
-                ToolbarIconBtn(Icons.Filled.FileDownload, "导出转换") { onOpenDialog(WorkspaceDialogType.EXPORT) }
-                ToolbarDivider()
                 ToolbarIconBtn(Icons.AutoMirrored.Filled.Undo, "撤销", enabled = canUndo, onClick = onUndo)
                 ToolbarIconBtn(Icons.AutoMirrored.Filled.Redo, "重做", enabled = canRedo, onClick = onRedo)
                 ToolbarDivider()
-                ToolbarIconBtn(Icons.Filled.Movie, "打开视频/音频", onClick = onPickVideo)
+                ToolbarIconBtn(Icons.Filled.Movie, "打开音视频", onClick = onPickVideo)
+                ToolbarIconBtn(Icons.Filled.FileDownload, "导出文件") { onOpenDialog(WorkspaceDialogType.EXPORT) }
+                ToolbarIconBtn(Icons.Filled.History, "历史快照") { onOpenDialog(WorkspaceDialogType.HISTORY_SNAPSHOTS) }
+                ToolbarDivider()
                 ToolbarIconBtn(Icons.Filled.Palette, "样式管理器", onClick = onOpenStyleManager)
                 ToolbarIconBtn(Icons.Filled.Tune, "脚本属性") { onOpenDialog(WorkspaceDialogType.PROPERTIES) }
                 ToolbarIconBtn(Icons.Filled.FontDownload, "字体检查") { onOpenDialog(WorkspaceDialogType.FONTS_COLLECTOR) }
+                ToolbarIconBtn(Icons.Filled.AspectRatio, "分辨率重采样") { onOpenDialog(WorkspaceDialogType.RESAMPLE_RESOLUTION) }
                 ToolbarDivider()
                 ToolbarIconBtn(Icons.Filled.FindReplace, "查找替换") { onOpenDialog(WorkspaceDialogType.FIND_REPLACE) }
                 ToolbarIconBtn(Icons.Filled.Schedule, "平移时间") { onOpenDialog(WorkspaceDialogType.SHIFT_TIMES) }
-                // SGMY 标志性工具栏按钮
-                ToolbarIconBtn(Icons.Filled.AutoFixHigh, "SGMY 修复常见错误", tintPrimary = true) {
-                    onOpenDialog(WorkspaceDialogType.SGMY_FIX_COMMON_ERRORS)
-                }
-                ToolbarIconBtn(Icons.Filled.MusicNote, "SGMY 滚动歌词生成", tintPrimary = true) {
-                    onOpenDialog(WorkspaceDialogType.SGMY_LYRIC_SCROLL)
-                }
-                ToolbarIconBtn(Icons.Filled.Spellcheck, "SGMY 中日韩文本工具") {
-                    onOpenDialog(WorkspaceDialogType.SGMY_CHINESE_CONVERT)
-                }
-                ToolbarIconBtn(Icons.Filled.AutoAwesome, "SGMY AI 分析", tintPrimary = true) {
-                    onOpenDialog(WorkspaceDialogType.SGMY_AI_ANALYSIS)
-                }
-                ToolbarDivider()
-                ToolbarIconBtn(Icons.Filled.Translate, "翻译助手") { onOpenDialog(WorkspaceDialogType.TRANSLATION_ASSISTANT) }
-                ToolbarIconBtn(Icons.Filled.AspectRatio, "重采样分辨率") { onOpenDialog(WorkspaceDialogType.RESAMPLE_RESOLUTION) }
                 ToolbarIconBtn(Icons.Filled.SelectAll, "按条件选行") { onOpenDialog(WorkspaceDialogType.SELECT_LINES) }
                 ToolbarIconBtn(Icons.Filled.ContentPaste, "粘贴覆盖") { onOpenDialog(WorkspaceDialogType.PASTE_OVER) }
+                ToolbarIconBtn(Icons.Filled.Translate, "翻译助手") { onOpenDialog(WorkspaceDialogType.TRANSLATION_ASSISTANT) }
                 ToolbarIconBtn(Icons.Filled.BookmarkBorder, "书签") { onOpenDialog(WorkspaceDialogType.BOOKMARKS) }
                 ToolbarDivider()
-                TextButton(onClick = onCycleTagMode) {
+                ToolbarIconBtn(Icons.Filled.AutoFixHigh, "修复常见错误", tintPrimary = true) {
+                    onOpenDialog(WorkspaceDialogType.SGMY_FIX_COMMON_ERRORS)
+                }
+                ToolbarIconBtn(Icons.Filled.MusicNote, "滚动歌词生成器", tintPrimary = true) {
+                    onOpenDialog(WorkspaceDialogType.SGMY_LYRIC_SCROLL)
+                }
+                ToolbarIconBtn(Icons.Filled.Spellcheck, "中日韩文本工具") {
+                    onOpenDialog(WorkspaceDialogType.SGMY_CHINESE_CONVERT)
+                }
+                ToolbarIconBtn(Icons.Filled.AutoAwesome, "AI 字幕助手", tintPrimary = true) {
+                    onOpenDialog(WorkspaceDialogType.SGMY_AI_ANALYSIS)
+                }
+
+                Spacer(Modifier.weight(1f))
+
+                TextButton(
+                    onClick = onCycleTagMode,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier.height(30.dp).pointerHoverIcon(PointerIcon.Hand),
+                ) {
                     val badge = when (tagDisplayMode) {
-                        TagDisplayMode.SHOW_TAGS -> "{标签}"
-                        TagDisplayMode.SIMPLIFY_TAGS -> "☼简化"
-                        TagDisplayMode.HIDE_TAGS -> "纯文本"
+                        TagDisplayMode.SHOW_TAGS -> "显示标签"
+                        TagDisplayMode.SIMPLIFY_TAGS -> "☼ 简化标签"
+                        TagDisplayMode.HIDE_TAGS -> "隐藏标签"
                     }
-                    Icon(Icons.Filled.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Filled.Visibility, contentDescription = null, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(badge, style = MaterialTheme.typography.labelSmall)
                 }
-                ToolbarIconBtn(Icons.Filled.Settings, "全局设置", onClick = onOpenSettings)
+                ToolbarIconBtn(Icons.Filled.Settings, "设置", onClick = onOpenSettings)
             }
             HorizontalDivider()
         }
@@ -343,7 +343,7 @@ fun DesktopMenuAndToolbar(
 }
 
 /**
- * 手机竖屏 / 紧凑姿态顶栏：保留高频一键按钮 + 完整 Aegisub 菜单聚合按钮，零功能阉割。
+ * 手机 / 紧凑分屏简洁顶栏：仅保留最核心的返回、撤销/重做、加载媒体与「工具箱」面板入口。
  */
 @Composable
 fun CompactStudioTopBar(
@@ -360,8 +360,9 @@ fun CompactStudioTopBar(
     onCycleTagMode: () -> Unit,
     onOpenDialog: (WorkspaceDialogType) -> Unit,
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 2.dp) {
+    var toolboxOpen by remember { mutableStateOf(false) }
+
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 1.dp) {
         Column {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
@@ -372,10 +373,10 @@ fun CompactStudioTopBar(
                 }
                 Text(
                     text = projectName,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
                 )
                 IconButton(onClick = onUndo, enabled = canUndo) {
                     Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "撤销")
@@ -383,97 +384,181 @@ fun CompactStudioTopBar(
                 IconButton(onClick = onRedo, enabled = canRedo) {
                     Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "重做")
                 }
-                IconButton(onClick = { onOpenDialog(WorkspaceDialogType.SGMY_FIX_COMMON_ERRORS) }) {
-                    Icon(
-                        Icons.Filled.AutoFixHigh,
-                        contentDescription = "修复常见错误",
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
                 IconButton(onClick = onPickVideo) {
-                    Icon(Icons.Filled.Movie, contentDescription = "挂载媒体")
+                    Icon(Icons.Filled.Movie, contentDescription = "打开音视频")
                 }
-                Box {
-                    IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Filled.Menu, contentDescription = "全部菜单")
-                    }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(
-                            text = { Text("⚡ 修复常见错误 (SGMY)") },
-                            onClick = { menuOpen = false; onOpenDialog(WorkspaceDialogType.SGMY_FIX_COMMON_ERRORS) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("🎵 音乐滚动歌词生成器 (SGMY)") },
-                            onClick = { menuOpen = false; onOpenDialog(WorkspaceDialogType.SGMY_LYRIC_SCROLL) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("✨ AI 字幕语法分析与翻译 (SGMY)") },
-                            onClick = { menuOpen = false; onOpenDialog(WorkspaceDialogType.SGMY_AI_ANALYSIS) },
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text("简繁中文互转…") },
-                            onClick = { menuOpen = false; onOpenDialog(WorkspaceDialogType.SGMY_CHINESE_CONVERT) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("字幕文本清理…") },
-                            onClick = { menuOpen = false; onOpenDialog(WorkspaceDialogType.SGMY_TEXT_CLEANUP) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("配对标点检查…") },
-                            onClick = { menuOpen = false; onOpenDialog(WorkspaceDialogType.SGMY_PAIR_CHECK) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("日语假名注音 (Furigana)…") },
-                            onClick = { menuOpen = false; onOpenDialog(WorkspaceDialogType.SGMY_FURIGANA) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("时间缝合 / 同样式重叠检查…") },
-                            onClick = { menuOpen = false; onOpenDialog(WorkspaceDialogType.SGMY_STITCH_TIMINGS) },
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text("样式管理器 (Styles Manager)…") },
-                            onClick = { menuOpen = false; onOpenStyleManager() },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("查找与替换…") },
-                            onClick = { menuOpen = false; onOpenDialog(WorkspaceDialogType.FIND_REPLACE) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("平移时间 / 时间后处理…") },
-                            onClick = { menuOpen = false; onOpenDialog(WorkspaceDialogType.SHIFT_TIMES) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("分辨率重采样 / 脚本属性…") },
-                            onClick = { menuOpen = false; onOpenDialog(WorkspaceDialogType.PROPERTIES) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("样式助手 / 翻译助手 / 汉字计时…") },
-                            onClick = { menuOpen = false; onOpenDialog(WorkspaceDialogType.TRANSLATION_ASSISTANT) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("切换标签显示 (${tagDisplayMode.name})") },
-                            onClick = { menuOpen = false; onCycleTagMode() },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("历史快照…") },
-                            onClick = { menuOpen = false; onOpenDialog(WorkspaceDialogType.HISTORY_SNAPSHOTS) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("导出转换 (ASS/SRT/VTT/TTML/LRC)…") },
-                            onClick = { menuOpen = false; onOpenDialog(WorkspaceDialogType.EXPORT) },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("全局设置与热键…") },
-                            onClick = { menuOpen = false; onOpenSettings() },
-                        )
-                    }
+                IconButton(onClick = { toolboxOpen = true }) {
+                    Icon(Icons.Filled.Apps, contentDescription = "工具箱")
                 }
             }
             HorizontalDivider()
         }
     }
+
+    if (toolboxOpen) {
+        StudioToolboxSheet(
+            tagDisplayMode = tagDisplayMode,
+            onDismiss = { toolboxOpen = false },
+            onOpenStyleManager = { toolboxOpen = false; onOpenStyleManager() },
+            onOpenSettings = { toolboxOpen = false; onOpenSettings() },
+            onCycleTagMode = { onCycleTagMode() },
+            onOpenDialog = { type -> toolboxOpen = false; onOpenDialog(type) },
+        )
+    }
+}
+
+/**
+ * 触控友好的分类网格工具抽屉（取代冗长拥挤的下拉菜单）。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StudioToolboxSheet(
+    tagDisplayMode: TagDisplayMode,
+    onDismiss: () -> Unit,
+    onOpenStyleManager: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onCycleTagMode: () -> Unit,
+    onOpenDialog: (WorkspaceDialogType) -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("字幕工具箱", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                TextButton(onClick = onOpenSettings) {
+                    Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("设置与热键")
+                }
+            }
+
+            ToolboxGroupTitle("智能修复与创意生成")
+            ToolboxTwoColumnRow(
+                "修复常见错误" to { onOpenDialog(WorkspaceDialogType.SGMY_FIX_COMMON_ERRORS) },
+                "滚动歌词生成器" to { onOpenDialog(WorkspaceDialogType.SGMY_LYRIC_SCROLL) },
+            )
+            ToolboxTwoColumnRow(
+                "AI 语法与润色" to { onOpenDialog(WorkspaceDialogType.SGMY_AI_ANALYSIS) },
+                "生成卡拉OK音节" to { onOpenDialog(WorkspaceDialogType.KARAOKE_GENERATOR) },
+            )
+
+            ToolboxGroupTitle("中日韩文本校对")
+            ToolboxTwoColumnRow(
+                "简繁中文转换" to { onOpenDialog(WorkspaceDialogType.SGMY_CHINESE_CONVERT) },
+                "字幕文本清理" to { onOpenDialog(WorkspaceDialogType.SGMY_TEXT_CLEANUP) },
+            )
+            ToolboxTwoColumnRow(
+                "配对标点检查" to { onOpenDialog(WorkspaceDialogType.SGMY_PAIR_CHECK) },
+                "日语假名注音" to { onOpenDialog(WorkspaceDialogType.SGMY_FURIGANA) },
+            )
+
+            ToolboxGroupTitle("时间轴与批量编辑")
+            ToolboxTwoColumnRow(
+                "查找与替换" to { onOpenDialog(WorkspaceDialogType.FIND_REPLACE) },
+                "平移时间轴" to { onOpenDialog(WorkspaceDialogType.SHIFT_TIMES) },
+            )
+            ToolboxTwoColumnRow(
+                "时间缝合与重叠检查" to { onOpenDialog(WorkspaceDialogType.SGMY_STITCH_TIMINGS) },
+                "时间后处理器" to { onOpenDialog(WorkspaceDialogType.TIMING_POST_PROCESS) },
+            )
+            ToolboxTwoColumnRow(
+                "按条件批量选行" to { onOpenDialog(WorkspaceDialogType.SELECT_LINES) },
+                "粘贴覆盖文本" to { onOpenDialog(WorkspaceDialogType.PASTE_OVER) },
+            )
+
+            ToolboxGroupTitle("样式、画幅与导出")
+            ToolboxTwoColumnRow(
+                "样式管理器" to onOpenStyleManager,
+                "样式 / 翻译助手" to { onOpenDialog(WorkspaceDialogType.TRANSLATION_ASSISTANT) },
+            )
+            ToolboxTwoColumnRow(
+                "分辨率重采样" to { onOpenDialog(WorkspaceDialogType.RESAMPLE_RESOLUTION) },
+                "脚本属性与字体" to { onOpenDialog(WorkspaceDialogType.PROPERTIES) },
+            )
+            val tagLabel = when (tagDisplayMode) {
+                TagDisplayMode.SHOW_TAGS -> "标签：完整显示"
+                TagDisplayMode.SIMPLIFY_TAGS -> "标签：简化为 ☼"
+                TagDisplayMode.HIDE_TAGS -> "标签：已隐藏"
+            }
+            ToolboxTwoColumnRow(
+                tagLabel to onCycleTagMode,
+                "历史版本快照" to { onOpenDialog(WorkspaceDialogType.HISTORY_SNAPSHOTS) },
+            )
+            ToolboxTwoColumnRow(
+                "导出字幕与歌词" to { onOpenDialog(WorkspaceDialogType.EXPORT) },
+                "帧率转换 / 书签" to { onOpenDialog(WorkspaceDialogType.FRAMERATE_CONVERT) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ToolboxGroupTitle(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+    )
+}
+
+@Composable
+private fun ToolboxTwoColumnRow(
+    left: Pair<String, () -> Unit>,
+    right: Pair<String, () -> Unit>,
+) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.weight(1f).height(44.dp).clickable(onClick = left.second),
+        ) {
+            Box(Modifier.padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+                Text(left.first, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.weight(1f).height(44.dp).clickable(onClick = right.second),
+        ) {
+            Box(Modifier.padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+                Text(right.first, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ShortcutMenuItem(
+    title: String,
+    shortcut: String? = null,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = MaterialTheme.typography.bodyMedium)
+                if (shortcut != null) {
+                    Spacer(Modifier.width(20.dp))
+                    Text(
+                        shortcut,
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
+            }
+        },
+        enabled = enabled,
+        onClick = onClick,
+    )
 }
 
 @Composable
@@ -485,10 +570,10 @@ private fun MenuDropdownButton(
     Box {
         TextButton(
             onClick = { expanded = true },
-            modifier = Modifier.height(30.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+            modifier = Modifier.height(30.dp).pointerHoverIcon(PointerIcon.Hand),
+            contentPadding = PaddingValues(horizontal = 9.dp, vertical = 2.dp),
         ) {
-            Text(title, style = MaterialTheme.typography.labelMedium)
+            Text(title, style = MaterialTheme.typography.labelLarge)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             content { expanded = false }
@@ -507,13 +592,13 @@ private fun ToolbarIconBtn(
     IconButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(34.dp),
+        modifier = Modifier.size(36.dp).pointerHoverIcon(PointerIcon.Hand),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = tooltip,
             tint = when {
-                !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.32f)
                 tintPrimary -> MaterialTheme.colorScheme.primary
                 else -> MaterialTheme.colorScheme.onSurfaceVariant
             },
@@ -526,9 +611,9 @@ private fun ToolbarIconBtn(
 private fun ToolbarDivider() {
     Box(
         Modifier
-            .padding(horizontal = 3.dp)
+            .padding(horizontal = 4.dp)
             .width(1.dp)
-            .height(20.dp)
+            .height(18.dp)
             .background(MaterialTheme.colorScheme.outlineVariant),
     )
 }

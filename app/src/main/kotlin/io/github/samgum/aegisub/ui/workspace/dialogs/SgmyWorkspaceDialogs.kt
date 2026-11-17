@@ -101,7 +101,7 @@ fun SgmyFixCommonErrorsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("⚡ 修复常见字幕错误 (SGMY)") },
+        title = { Text("修复常见字幕错误") },
         text = {
             Column(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -205,14 +205,14 @@ fun SgmyLyricScrollDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("🎵 音乐滚动歌词生成器 (SGMY)") },
+        title = { Text("滚动歌词生成器") },
         text = {
             Column(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    "生成 Apple Music / 音乐播放器风格的多行平滑滚动歌词字幕（自动创建 ScrollCurrent / ScrollDim 样式并计算三次缓出 \\move + \\t 动画）。",
+                    "生成多行平滑滚动歌词，支持单语或双语自动配对。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -370,7 +370,7 @@ fun SgmyCjkToolsDialog(
         onDismissRequest = onDismiss,
         title = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("中日韩文本工具箱 (SGMY)")
+                Text("中日韩文本工具")
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -404,7 +404,7 @@ fun SgmyCjkToolsDialog(
                     var toTrad by remember { mutableStateOf(true) }
                     var convRes by remember { mutableStateOf<ChineseConverter.Result?>(null) }
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("基于 Android ICU + SGMY 词库保护转换，严格跳过 {...} ASS 标签块。", style = MaterialTheme.typography.bodySmall)
+                        Text("自动跳过样式标签，仅转换台词正文。", style = MaterialTheme.typography.bodySmall)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             FilterChip(selected = toTrad, onClick = { toTrad = true }, label = { Text("简体 → 繁体") })
                             FilterChip(selected = !toTrad, onClick = { toTrad = false }, label = { Text("繁体 → 简体") })
@@ -528,7 +528,7 @@ fun SgmyCjkToolsDialog(
                         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text("填写 `汉字=かな`（全局）或 `@行号#序号:汉字=かな`（逐处），幂等生成可重编辑的 {*sgmy-furigana} 注音。", style = MaterialTheme.typography.bodySmall)
+                        Text("填写 `汉字=かな`（全局）或 `@行号#序号:汉字=かな`（逐处）：", style = MaterialTheme.typography.bodySmall)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             FilterChip(
                                 selected = position == FuriganaAnnotator.Position.ABOVE,
@@ -613,7 +613,7 @@ fun SgmyTimingToolsDialog(
         onDismissRequest = onDismiss,
         title = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("时间轴缝合与重叠检查 (SGMY)")
+                Text("时间缝合与重叠检查")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(
                         selected = initialTab == WorkspaceDialogType.SGMY_STITCH_TIMINGS,
@@ -636,7 +636,7 @@ fun SgmyTimingToolsDialog(
                 var selectedOnly by remember { mutableStateOf(selectedIds.isNotEmpty()) }
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("自动消除相邻字幕行之间的微小闪烁空隙（对齐桌面 DialogStitchTimings）：", style = MaterialTheme.typography.bodySmall)
+                    Text("自动消除相邻字幕行之间的细小空隙：", style = MaterialTheme.typography.bodySmall)
                     FilterChip(
                         selected = anchor == StitchTimings.Anchor.PREVIOUS_LINE_END,
                         onClick = { anchor = StitchTimings.Anchor.PREVIOUS_LINE_END },
@@ -775,7 +775,7 @@ fun SgmyAiAnalysisSheet(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("✨ SGMY AI 字幕分析与润色", style = MaterialTheme.typography.titleLarge)
+                Text("AI 字幕分析与润色", style = MaterialTheme.typography.titleLarge)
                 TextButton(onClick = { showConfig = !showConfig }) {
                     Text(if (showConfig) "收起端点配置" else "配置服务商 / Key")
                 }
