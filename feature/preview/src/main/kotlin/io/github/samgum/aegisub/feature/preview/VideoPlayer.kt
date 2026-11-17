@@ -3,7 +3,7 @@ package io.github.samgum.aegisub.feature.preview
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * 播放器状态快照（驱动 UI 与当前行派生）。
+ * 播放器状态快照（驱动视频画面、HDR 色域徽标、音频播放头与活动字幕求值）。
  *
  * @author 伤感咩吖
  */
@@ -15,11 +15,15 @@ data class PlaybackState(
     val isReady: Boolean = false,
     /** 视频帧率；0f 表示未知（用于逐帧步进与帧级微调）。 */
     val fps: Float = 0f,
+    val videoWidth: Int = 0,
+    val videoHeight: Int = 0,
+    /** SGMY HDR / BT.2020 / Dolby Vision 检测标记。 */
+    val isHdr: Boolean = false,
+    val colorInfoLabel: String = "",
 )
 
 /**
- * 视频播放器抽象。真实实现封装 ExoPlayer；测试用假实现。
- * 位置采样在实现内部以协程周期更新 [state]，UI 与 VM 只订阅不反写。
+ * 视频/音频播放器抽象。真实实现封装 Media3 ExoPlayer；单测使用假实现。
  *
  * @author 伤感咩吖
  */
@@ -30,9 +34,19 @@ interface VideoPlayer {
     fun pause()
     fun seekTo(positionMs: Long)
     fun setSpeed(rate: Float)
-    /** 前进一帧（逐帧预览）。 */
     fun seekNextFrame()
-    /** 后退一帧；帧率未知时按 30fps 近似。 */
     fun seekPreviousFrame()
     fun release()
+
+    /**
+     * 仿桌面 Aegisub 区间试听（播放当前行 / 前 500ms / 后 500ms / 行外前后试听）：
+     * 跳转到 [startMs] 开始播放，到达 [endMs] 时自动暂停。
+     */
+    fun playRange(startMs: Long, endMs: Long) {
+        seekTo(startMs.coerceAtLeast(0L))
+        play()
+    }
+
+    /** SGMY 4K HDR 预览分辨率降采样开关（默认开启 1920×1080 上限降低解码与合成负载）。 */
+    fun setHdrPreviewOptimize(enabled: Boolean) {}
 }

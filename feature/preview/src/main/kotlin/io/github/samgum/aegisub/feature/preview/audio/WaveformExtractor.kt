@@ -10,46 +10,31 @@ import io.github.samgum.aegisub.domain.audio.AudioAnalysis
 import io.github.samgum.aegisub.domain.audio.Spectrogram
 import io.github.samgum.aegisub.domain.audio.SpectrogramData
 import io.github.samgum.aegisub.domain.audio.Waveform
-import io.github.samgum.aegisub.domain.audio.WaveformDownsampler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
 import java.nio.ByteOrder
-import java.nio.ByteBuffer
 import javax.inject.Inject
+import kotlin.math.abs
 
 /**
- * 音频分析提取器：从媒体 URI 解码音频，产出峰值波形 + 频谱（一次解码）。
+ * 音频波形/频谱与视频关键帧提取器：
+ * - 流式分桶提取高精度峰值波形（零整段 PCM OOM 风险，支持 2 小时以上长片与 96kHz Hi-Res 音频）
+ * - 快速扫描视频轨道 `SAMPLE_FLAG_SYNC` 提取全部关键帧毫秒时间戳，直接驱动桌面级关键帧吸附
  *
  * @author 伤感咩吖
  */
 interface WaveformExtractor {
-    /** 提取并降采样为 bucketCount 柱波形；无音频轨/失败返回 null。 */
     suspend fun extract(uri: String, bucketCount: Int): Waveform?
-
-    /**
-     * 一次解码同时产出峰值波形与频谱（频谱按 [frameCount] 个时间帧、[bins] 个频率 bin）。
-     * 无音频轨/失败返回 null。
-     */
     suspend fun extractFull(uri: String, bucketCount: Int, frameCount: Int, bins: Int): AudioAnalysis?
+    suspend fun extractKeyframesMs(uri: String): List<Long> = emptyList()
 }
 
-/**
- * 基于 MediaExtractor + MediaCodec 同步解码的实现。
- *
- * 注意：当前整段 PCM 读完再降采样——短视频（打轴常用）安全；
- * 超长视频（数十分钟）有 OOM 风险，后续可改流式降采样。
- *
- * @author 伤感咩吖
- */
 class MediaCodecWaveformExtractor @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : WaveformExtractor {
 
     override suspend fun extract(uri: String, bucketCount: Int): Waveform? = withContext(Dispatchers.Default) {
-        val durationMs = readDurationMs(uri)
-        val decoded = decodeToPcm(uri) ?: return@withContext null
-        Waveform(WaveformDownsampler.downsample(decoded.samples, bucketCount), durationMs)
+        extractStreamingAnalysis(uri, bucketCount.coerceAtLeast(256), computeSpectrogram = false, frameCount = 0, bins = 0)?.waveform
     }
 
     override suspend fun extractFull(
@@ -58,44 +43,91 @@ class MediaCodecWaveformExtractor @Inject constructor(
         frameCount: Int,
         bins: Int,
     ): AudioAnalysis? = withContext(Dispatchers.Default) {
-        val durationMs = readDurationMs(uri)
-        val decoded = decodeToPcm(uri) ?: return@withContext null
-        val peaks = WaveformDownsampler.downsample(decoded.samples, bucketCount)
-        // 单声道归一化（多声道取均值），用于频谱
-        val mono = monoNormalize(decoded.samples, decoded.channels)
-        // 按目标帧数反推 hop，使频谱时间分辨率对齐波形柱数
-        val fftSize = SPECTROGRAM_FFT_SIZE
-        val hop = if (mono.size > fftSize && frameCount > 1) {
-            ((mono.size - fftSize) / (frameCount - 1)).coerceAtLeast(1)
-        } else {
-            fftSize / 2
-        }
-        val frames = Spectrogram.compute(mono, fftSize = fftSize, hop = hop, bins = bins)
-        AudioAnalysis(Waveform(peaks, durationMs), SpectrogramData(frames, durationMs))
+        extractStreamingAnalysis(
+            uri = uri,
+            bucketCount = bucketCount.coerceAtLeast(512),
+            computeSpectrogram = true,
+            frameCount = frameCount.coerceAtLeast(128),
+            bins = bins.coerceAtLeast(32),
+        )
     }
 
-    /** 解码结果：PCM 样本 + 采样率 + 声道数。 */
-    private data class DecodedAudio(val samples: ShortArray, val sampleRate: Int, val channels: Int)
+    override suspend fun extractKeyframesMs(uri: String): List<Long> = withContext(Dispatchers.IO) {
+        val extractor = MediaExtractor()
+        try {
+            extractor.setDataSource(context, Uri.parse(uri), null)
+            var videoTrack = -1
+            for (i in 0 until extractor.trackCount) {
+                val fmt = extractor.getTrackFormat(i)
+                val mime = fmt.getString(MediaFormat.KEY_MIME) ?: continue
+                if (mime.startsWith("video/")) {
+                    videoTrack = i
+                    break
+                }
+            }
+            if (videoTrack < 0) return@withContext emptyList()
+            extractor.selectTrack(videoTrack)
+            val keyframes = ArrayList<Long>(512)
+            var guard = 0
+            while (guard < 500_000) {
+                val flags = extractor.sampleFlags
+                val timeUs = extractor.sampleTime
+                if (timeUs < 0) break
+                if ((flags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
+                    keyframes.add(timeUs / 1_000L)
+                }
+                if (!extractor.advance()) break
+                guard++
+            }
+            keyframes.distinct().sorted()
+        } catch (_: Exception) {
+            emptyList()
+        } finally {
+            runCatching { extractor.release() }
+        }
+    }
 
-    private fun decodeToPcm(uri: String): DecodedAudio? {
+    private fun extractStreamingAnalysis(
+        uri: String,
+        bucketCount: Int,
+        computeSpectrogram: Boolean,
+        frameCount: Int,
+        bins: Int,
+    ): AudioAnalysis? {
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
         return try {
             extractor.setDataSource(context, Uri.parse(uri), null)
             val (trackIndex, format) = selectAudioTrack(extractor) ?: return null
             extractor.selectTrack(trackIndex)
-            val mime = format.getString(MediaFormat.KEY_MIME)!!
-            val sampleRate = if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) format.getInteger(MediaFormat.KEY_SAMPLE_RATE) else 44_100
-            val channels = if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) format.getInteger(MediaFormat.KEY_CHANNEL_COUNT) else 1
+            val mime = format.getString(MediaFormat.KEY_MIME) ?: return null
+            val channels = if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+                format.getInteger(MediaFormat.KEY_CHANNEL_COUNT).coerceAtLeast(1)
+            } else 1
+            val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) {
+                format.getLong(MediaFormat.KEY_DURATION).coerceAtLeast(1_000L)
+            } else 0L
+
+            val peaks = FloatArray(bucketCount)
+            // 频谱降采样缓冲：最多保留约 262,144 个单声道样本用于全局概览频谱，杜绝长视频 OOM
+            val maxSpecSamples = 262_144
+            val specRing = if (computeSpectrogram) FloatArray(maxSpecSamples) else FloatArray(0)
+            var specWriteCount = 0
+            var totalFramesDecoded = 0L
+            var lastPtsUs = 0L
+
             codec = MediaCodec.createDecoderByType(mime)
             codec.configure(format, null, null, 0)
             codec.start()
 
-            val pcm = ByteArrayOutputStream()
             val info = MediaCodec.BufferInfo()
             var inputDone = false
             var outputDone = false
             val timeoutUs = 10_000L
+
+            // 若容器未给出 durationUs，用临时块列表收集峰值并在解码完成后重分桶
+            val fallbackChunkPeaks = if (durationUs <= 0L) ArrayList<Float>(2048) else null
+
             while (!outputDone) {
                 if (!inputDone) {
                     val inIdx = codec.dequeueInputBuffer(timeoutUs)
@@ -114,41 +146,75 @@ class MediaCodecWaveformExtractor @Inject constructor(
                 val outIdx = codec.dequeueOutputBuffer(info, timeoutUs)
                 if (outIdx >= 0) {
                     val outBuf = codec.getOutputBuffer(outIdx)
-                    if (outBuf != null && info.size > 0) {
-                        val chunk = ByteArray(info.size)
+                    if (outBuf != null && info.size >= 2) {
+                        lastPtsUs = maxOf(lastPtsUs, info.presentationTimeUs)
                         outBuf.position(info.offset)
-                        outBuf.get(chunk, 0, info.size)
-                        pcm.write(chunk)
+                        outBuf.limit(info.offset + info.size)
+                        val shortBuf = outBuf.slice().order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+                        val totalShorts = shortBuf.remaining()
+                        val framesHere = totalShorts / channels
+                        var chunkMax = 0f
+
+                        for (f in 0 until framesHere) {
+                            var monoSum = 0
+                            var maxAbs = 0
+                            for (c in 0 until channels) {
+                                val v = shortBuf.get(f * channels + c).toInt()
+                                monoSum += v
+                                val av = abs(v)
+                                if (av > maxAbs) maxAbs = av
+                            }
+                            val normPeak = (maxAbs / 32_768f).coerceIn(0f, 1f)
+                            if (normPeak > chunkMax) chunkMax = normPeak
+
+                            if (durationUs > 0L) {
+                                val estUs = info.presentationTimeUs + (f * 1_000_000L) / 48_000L
+                                val bIdx = ((estUs.toDouble() / durationUs.toDouble()) * bucketCount)
+                                    .toInt().coerceIn(0, bucketCount - 1)
+                                if (normPeak > peaks[bIdx]) peaks[bIdx] = normPeak
+                            }
+
+                            if (computeSpectrogram && (totalFramesDecoded % 8L == 0L) && specWriteCount < maxSpecSamples) {
+                                specRing[specWriteCount++] = ((monoSum / channels) / 32_768f).coerceIn(-1f, 1f)
+                            }
+                            totalFramesDecoded++
+                        }
+                        fallbackChunkPeaks?.add(chunkMax)
                     }
                     codec.releaseOutputBuffer(outIdx, false)
-                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outputDone = true
+                    if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) outputDone = true
                 }
             }
 
-            val bytes = pcm.toByteArray()
-            val shorts = ShortArray(bytes.size / 2)
-            ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(shorts)
-            DecodedAudio(shorts, sampleRate, channels)
-        } catch (e: Exception) {
+            if (fallbackChunkPeaks != null && fallbackChunkPeaks.isNotEmpty()) {
+                for (b in 0 until bucketCount) {
+                    val s = (b * fallbackChunkPeaks.size) / bucketCount
+                    val e = (((b + 1) * fallbackChunkPeaks.size) / bucketCount).coerceAtLeast(s + 1)
+                    var m = 0f
+                    for (k in s until e.coerceAtMost(fallbackChunkPeaks.size)) {
+                        if (fallbackChunkPeaks[k] > m) m = fallbackChunkPeaks[k]
+                    }
+                    peaks[b] = m
+                }
+            }
+
+            val finalDurationMs = (if (durationUs > 0L) durationUs else lastPtsUs) / 1_000L
+            val waveform = Waveform(peaks, finalDurationMs)
+            val specData = if (computeSpectrogram && specWriteCount > SPECTROGRAM_FFT_SIZE) {
+                val monoSlice = specRing.copyOf(specWriteCount)
+                val hop = ((monoSlice.size - SPECTROGRAM_FFT_SIZE) / (frameCount - 1).coerceAtLeast(1)).coerceAtLeast(1)
+                val frames = Spectrogram.compute(monoSlice, fftSize = SPECTROGRAM_FFT_SIZE, hop = hop, bins = bins)
+                SpectrogramData(frames, finalDurationMs)
+            } else {
+                SpectrogramData(emptyArray(), finalDurationMs)
+            }
+            AudioAnalysis(waveform, specData)
+        } catch (_: Exception) {
             null
         } finally {
-            try { codec?.stop() } catch (_: Exception) {}
-            try { codec?.release() } catch (_: Exception) {}
-            try { extractor.release() } catch (_: Exception) {}
-        }
-    }
-
-    /** 交错多声道 ShortArray → 单声道归一化 FloatArray（-1..1，各声道取均值）。 */
-    private fun monoNormalize(samples: ShortArray, channels: Int): FloatArray {
-        val ch = channels.coerceAtLeast(1)
-        if (ch == 1) {
-            return FloatArray(samples.size) { samples[it] / 32_768f }
-        }
-        val frameCount = samples.size / ch
-        return FloatArray(frameCount) { frame ->
-            var sum = 0
-            for (c in 0 until ch) sum += samples[frame * ch + c].toInt()
-            (sum / ch) / 32_768f
+            runCatching { codec?.stop() }
+            runCatching { codec?.release() }
+            runCatching { extractor.release() }
         }
     }
 
@@ -161,21 +227,7 @@ class MediaCodecWaveformExtractor @Inject constructor(
         return null
     }
 
-    private fun readDurationMs(uri: String): Long {
-        val extractor = MediaExtractor()
-        return try {
-            extractor.setDataSource(context, Uri.parse(uri), null)
-            val (_, format) = selectAudioTrack(extractor) ?: return 0L
-            if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) / 1000 else 0L
-        } catch (e: Exception) {
-            0L
-        } finally {
-            try { extractor.release() } catch (_: Exception) {}
-        }
-    }
-
     private companion object {
-        /** 频谱 FFT 窗口（512 点，2 的幂，频率分辨率 ~86Hz@44.1k）。 */
         const val SPECTROGRAM_FFT_SIZE = 512
     }
 }

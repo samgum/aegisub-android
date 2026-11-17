@@ -4,11 +4,11 @@ plugins {
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
 }
 
-kotlin { jvmToolchain(21) }
+kotlin { jvmToolchain(17) }
 
 dependencies {
     // AssScript.events: ImmutableList 出现在公开 API → 用 api 暴露给消费者

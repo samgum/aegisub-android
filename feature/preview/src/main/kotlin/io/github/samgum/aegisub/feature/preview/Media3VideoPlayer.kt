@@ -1,11 +1,15 @@
 package io.github.samgum.aegisub.feature.preview
 
 import android.content.Context
+import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,16 +25,24 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * ExoPlayer 封装：监听状态/参数 → 回填 [state]；播放时协程周期(≈50ms)采样位置。
- * [exoPlayer] 暴露给 PlayerView 绑定（仅预览模块内使用）。
+ * Media3 ExoPlayer 专业版封装（复刻 samgum/Aegisub SGMY 视频与音频引擎特性）：
+ * - 支持 **0.25x–4.0x 保调变速**（`PlaybackParameters(rate, 1.0f)`）
+ * - 自动识别 **BT.2020 / HDR10 (PQ) / HLG / Dolby Vision** 色彩空间并支持 1080p 预览降采样优化
+ * - 支持桌面 Aegisub 标志性 **区间自动停播 (`playRange`)**（播放选中行、首尾 500ms、前后导试听）
+ * - 25ms 高刷采样驱动 `\move` / `\t` / 卡拉OK `\kf` 扫词与音频波形游标顺滑跟手
  *
  * @author 伤感咩吖
  */
+@OptIn(UnstableApi::class)
 class Media3VideoPlayer @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : VideoPlayer {
 
-    val exoPlayer: ExoPlayer = ExoPlayer.Builder(context).build()
+    private val trackSelector = DefaultTrackSelector(context)
+
+    val exoPlayer: ExoPlayer = ExoPlayer.Builder(context)
+        .setTrackSelector(trackSelector)
+        .build()
 
     private val _state = MutableStateFlow(PlaybackState())
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
@@ -38,11 +50,19 @@ class Media3VideoPlayer @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var pollJob: Job? = null
 
+    @Volatile
+    private var stopAtPositionMs: Long? = null
+
     init {
         exoPlayer.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _state.value = _state.value.copy(isPlaying = isPlaying)
-                if (isPlaying) startPolling() else stopPolling()
+                if (isPlaying) {
+                    startPolling()
+                } else {
+                    stopAtPositionMs = null
+                    stopPolling()
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -53,7 +73,9 @@ class Media3VideoPlayer @Inject constructor(
                         durationMs = duration,
                         positionMs = exoPlayer.currentPosition.coerceAtLeast(0L),
                     )
-                    readFps()
+                    inspectVideoFormat()
+                } else if (playbackState == Player.STATE_ENDED) {
+                    stopAtPositionMs = null
                 }
             }
 
@@ -61,43 +83,99 @@ class Media3VideoPlayer @Inject constructor(
                 _state.value = _state.value.copy(speed = playbackParameters.speed)
             }
 
-            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
-                // 帧率在轨道就绪后由 videoFormat 提供；此处顺带再探一次
-                readFps()
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                _state.value = _state.value.copy(
+                    videoWidth = videoSize.width,
+                    videoHeight = videoSize.height,
+                )
+                inspectVideoFormat()
             }
         })
     }
 
-    /** 从当前视频 Format 读取帧率写入 [state]；未知（C.LENGTH_UNSET）记为 0。 */
-    private fun readFps() {
-        val formatFps = exoPlayer.videoFormat?.frameRate ?: Format.NO_VALUE.toFloat()
+    private fun inspectVideoFormat() {
+        val vf = exoPlayer.videoFormat
+        val formatFps = vf?.frameRate ?: Format.NO_VALUE.toFloat()
         val fps = if (formatFps > 0f) formatFps else 0f
-        if (_state.value.fps != fps) {
-            _state.value = _state.value.copy(fps = fps)
+
+        val colorInfo = vf?.colorInfo
+        val isBt2020 = colorInfo?.colorSpace == C.COLOR_SPACE_BT2020
+        val transfer = colorInfo?.colorTransfer ?: Format.NO_VALUE
+        val isPq = transfer == C.COLOR_TRANSFER_ST2084
+        val isHlg = transfer == C.COLOR_TRANSFER_HLG
+        val isDv = vf?.sampleMimeType?.contains("dolby-vision", ignoreCase = true) == true
+        val isHdr = isBt2020 || isPq || isHlg || isDv
+        val colorLabel = when {
+            isDv -> "Dolby Vision"
+            isPq -> "HDR10 (PQ / BT.2020)"
+            isHlg -> "HLG (BT.2020)"
+            isBt2020 -> "BT.2020"
+            vf != null && (vf.width > 0 || vf.height > 0) -> "SDR (BT.709)"
+            else -> ""
+        }
+
+        _state.value = _state.value.copy(
+            fps = fps,
+            videoWidth = vf?.width?.takeIf { it > 0 } ?: _state.value.videoWidth,
+            videoHeight = vf?.height?.takeIf { it > 0 } ?: _state.value.videoHeight,
+            isHdr = isHdr,
+            colorInfoLabel = colorLabel,
+        )
+    }
+
+    override fun setHdrPreviewOptimize(enabled: Boolean) {
+        trackSelector.parameters = if (enabled) {
+            trackSelector.buildUponParameters()
+                .setMaxVideoSize(1920, 1080)
+                .build()
+        } else {
+            trackSelector.buildUponParameters()
+                .clearVideoSizeConstraints()
+                .build()
         }
     }
 
     override fun setMedia(uri: String) {
+        stopAtPositionMs = null
         exoPlayer.setMediaItem(MediaItem.fromUri(uri))
         exoPlayer.prepare()
     }
 
-    override fun play() = exoPlayer.play()
+    override fun play() {
+        stopAtPositionMs = null
+        exoPlayer.play()
+    }
 
-    override fun pause() = exoPlayer.pause()
+    override fun playRange(startMs: Long, endMs: Long) {
+        val safeStart = startMs.coerceAtLeast(0L)
+        val safeEnd = endMs.coerceAtLeast(safeStart + 20L)
+        stopAtPositionMs = safeEnd
+        exoPlayer.seekTo(safeStart)
+        updatePosition()
+        exoPlayer.play()
+    }
+
+    override fun pause() {
+        stopAtPositionMs = null
+        exoPlayer.pause()
+    }
 
     override fun seekTo(positionMs: Long) {
-        exoPlayer.seekTo(positionMs)
+        stopAtPositionMs = null
+        exoPlayer.seekTo(positionMs.coerceAtLeast(0L))
         updatePosition()
     }
 
     override fun setSpeed(rate: Float) {
-        exoPlayer.playbackParameters = PlaybackParameters(rate)
+        // SGMY 保调变速：0.25x–4.0x，pitch 固定 1.0f 保持原调
+        val clamped = rate.coerceIn(0.25f, 4.0f)
+        exoPlayer.playbackParameters = PlaybackParameters(clamped, 1.0f)
     }
 
     override fun seekNextFrame() {
-        // 前进一帧：帧率已知用 1000/fps，未知按 30fps(≈33ms) 近似；ExoPlayer 会落到最近帧
         if (!_state.value.isReady) return
+        stopAtPositionMs = null
+        exoPlayer.pause()
         val fps = _state.value.fps.let { if (it > 0f) it else 30f }
         val frameMs = (1000.0f / fps).toLong().coerceAtLeast(1L)
         val maxPos = exoPlayer.duration.coerceAtLeast(0L)
@@ -107,8 +185,9 @@ class Media3VideoPlayer @Inject constructor(
     }
 
     override fun seekPreviousFrame() {
-        // 后退一帧：帧率已知用 1000/fps，未知按 30fps(≈33ms) 近似
         if (!_state.value.isReady) return
+        stopAtPositionMs = null
+        exoPlayer.pause()
         val fps = _state.value.fps.let { if (it > 0f) it else 30f }
         val frameMs = (1000.0f / fps).toLong().coerceAtLeast(1L)
         val target = (exoPlayer.currentPosition - frameMs).coerceAtLeast(0L)
@@ -117,13 +196,22 @@ class Media3VideoPlayer @Inject constructor(
     }
 
     override fun release() {
+        stopAtPositionMs = null
         stopPolling()
         scope.cancel()
         exoPlayer.release()
     }
 
     private fun updatePosition() {
-        _state.value = _state.value.copy(positionMs = exoPlayer.currentPosition.coerceAtLeast(0L))
+        val pos = exoPlayer.currentPosition.coerceAtLeast(0L)
+        _state.value = _state.value.copy(positionMs = pos)
+        val limit = stopAtPositionMs
+        if (limit != null && pos >= limit) {
+            stopAtPositionMs = null
+            exoPlayer.pause()
+            exoPlayer.seekTo(limit)
+            _state.value = _state.value.copy(positionMs = limit, isPlaying = false)
+        }
     }
 
     private fun startPolling() {
@@ -142,6 +230,6 @@ class Media3VideoPlayer @Inject constructor(
     }
 
     private companion object {
-        const val POLL_INTERVAL_MS = 50L
+        const val POLL_INTERVAL_MS = 25L
     }
 }

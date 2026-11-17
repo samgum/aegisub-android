@@ -4,8 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
@@ -64,12 +64,15 @@ fun keyName(keyCode: Long): String = when (keyCode) {
     Key.Backspace.keyCode -> "⌫"
     Key.Enter.keyCode -> "↵"
     Key.Tab.keyCode -> "Tab"
+    Key.Equals.keyCode -> "="
+    Key.Minus.keyCode -> "-"
+    Key.LeftBracket.keyCode -> "["
+    Key.RightBracket.keyCode -> "]"
     else -> "#$keyCode"
 }
 
 /**
- * 默认热键表（仿桌面 Aegisub 默认约定）。
- * 编辑类用 Ctrl/Shift/Alt 组合避免与文本输入冲突；打轴 W/A/S/D 仅预览屏处理。
+ * 默认热键表（对齐桌面 samgum/Aegisub SGMY 默认热键约定，含外接键盘 / 平板键盘套 / DeX 支持）。
  */
 val DEFAULT_HOTKEYS: Map<HotkeyAction, KeyCombo> = mapOf(
     HotkeyAction.UNDO to KeyCombo(true, false, false, Key.Z.keyCode),
@@ -82,18 +85,33 @@ val DEFAULT_HOTKEYS: Map<HotkeyAction, KeyCombo> = mapOf(
     HotkeyAction.SPLIT_LINE to KeyCombo(true, true, false, Key.K.keyCode),
     HotkeyAction.JOIN_KEEP_FIRST to KeyCombo(true, false, false, Key.J.keyCode),
     HotkeyAction.JOIN_CONCAT to KeyCombo(true, true, false, Key.J.keyCode),
+    HotkeyAction.JOIN_KARAOKE to KeyCombo(false, true, true, Key.J.keyCode),
     HotkeyAction.MOVE_LINE_UP to KeyCombo(false, false, true, Key.DirectionUp.keyCode),
     HotkeyAction.MOVE_LINE_DOWN to KeyCombo(false, false, true, Key.DirectionDown.keyCode),
+    HotkeyAction.INSERT_BEFORE to KeyCombo(true, false, false, Key.I.keyCode),
     HotkeyAction.INSERT_AFTER to KeyCombo(true, true, false, Key.I.keyCode),
+    HotkeyAction.COPY_LINES to KeyCombo(true, true, false, Key.C.keyCode),
+    HotkeyAction.PASTE_LINES to KeyCombo(true, true, false, Key.V.keyCode),
+    HotkeyAction.SELECT_ALL to KeyCombo(true, true, false, Key.A.keyCode),
     HotkeyAction.SELECT_PREV to KeyCombo(false, false, false, Key.W.keyCode),
     HotkeyAction.SELECT_NEXT to KeyCombo(false, false, false, Key.D.keyCode),
+    HotkeyAction.COMMIT_AND_NEXT to KeyCombo(false, false, false, Key.G.keyCode),
     HotkeyAction.PLAY_PAUSE to KeyCombo(false, false, false, Key.Spacebar.keyCode),
+    HotkeyAction.PLAY_LINE to KeyCombo(false, false, false, Key.R.keyCode),
     HotkeyAction.SEEK_BACK to KeyCombo(false, false, false, Key.DirectionLeft.keyCode),
     HotkeyAction.SEEK_FORWARD to KeyCombo(false, false, false, Key.DirectionRight.keyCode),
     HotkeyAction.FRAME_BACK to KeyCombo(true, false, false, Key.DirectionLeft.keyCode),
     HotkeyAction.FRAME_FORWARD to KeyCombo(true, false, false, Key.DirectionRight.keyCode),
+    HotkeyAction.SPEED_DOWN to KeyCombo(true, false, false, Key.LeftBracket.keyCode),
+    HotkeyAction.SPEED_UP to KeyCombo(true, false, false, Key.RightBracket.keyCode),
+    HotkeyAction.SPEED_RESET to KeyCombo(true, false, false, Key.Zero.keyCode),
     HotkeyAction.SET_START_TO_POS to KeyCombo(false, false, false, Key.A.keyCode),
     HotkeyAction.SET_END_TO_POS to KeyCombo(false, false, false, Key.S.keyCode),
+    HotkeyAction.ADD_LEAD_IN to KeyCombo(false, false, false, Key.C.keyCode),
+    HotkeyAction.ADD_LEAD_OUT to KeyCombo(false, false, false, Key.V.keyCode),
+    HotkeyAction.FIX_COMMON_ERRORS to KeyCombo(true, true, false, Key.F.keyCode),
+    HotkeyAction.LYRIC_SCROLL to KeyCombo(true, true, false, Key.L.keyCode),
+    HotkeyAction.CYCLE_TAG_HIDING to KeyCombo(true, true, false, Key.T.keyCode),
 )
 
 /** 热键控制器：持有当前绑定表，匹配按键事件 → 动作。 */
@@ -105,11 +123,6 @@ class HotkeyController(val map: Map<HotkeyAction, KeyCombo>) {
     }
 }
 
-/**
- * 热键 ViewModel：读取用户自定义绑定，与默认表合并；提供改键/重置。
- *
- * @author 伤感咩吖
- */
 @HiltViewModel
 class HotkeyViewModel @Inject constructor(
     private val repo: HotkeyConfigRepository,
@@ -135,7 +148,6 @@ class HotkeyViewModel @Inject constructor(
     }
 }
 
-/** 屏级获取热键控制器（订阅当前绑定）。app / feature 共用。 */
 @Composable
 fun rememberHotkeyController(): HotkeyController {
     val vm: HotkeyViewModel = hiltViewModel()
@@ -143,6 +155,5 @@ fun rememberHotkeyController(): HotkeyController {
     return remember(map) { HotkeyController(map) }
 }
 
-/** 设置屏改键用：暴露当前绑定 + 改键/重置。 */
 @Composable
 fun rememberHotkeyEditor(): HotkeyViewModel = hiltViewModel()

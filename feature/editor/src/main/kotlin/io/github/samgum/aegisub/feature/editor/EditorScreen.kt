@@ -183,7 +183,7 @@ fun EditorScreen(
             // < 600dp 为 Compact（手机竖屏），否则 Medium/Expanded（平板/横屏）
             val isCompact = when (layoutMode) {
                 LayoutMode.COMPACT -> true
-                LayoutMode.EXPANDED -> false
+                LayoutMode.EXPANDED, LayoutMode.DESKTOP_PRO -> false
                 LayoutMode.AUTO -> LocalConfiguration.current.screenWidthDp < 600
             }
             Box(
