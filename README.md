@@ -1,70 +1,114 @@
-# Aegisub Android
+# Aegisub SGMY Android
 
-> Android 平台上最接近桌面 Aegisub 体验的专业级字幕编辑器。
+**English** | [简体中文](README_CN.md)
 
-[![Status](https://img.shields.io/badge/status-Phase%208%20(Desktop%20Replication)-blue)](ROADMAP.md)
-[![License](https://img.shields.io/badge/license-Aegisub%20BSD-green)](LICENCE)
+[![CI](https://github.com/samgum/aegisub-android/actions/workflows/android-ci.yml/badge.svg)](https://github.com/samgum/aegisub-android/actions/workflows/android-ci.yml)
+[![Version](https://img.shields.io/badge/version-2.0.0--sgmy-2563EB)]()
+[![License](https://img.shields.io/badge/license-BSD%203--Clause-16A34A)](LICENCE)
 [![Platform](https://img.shields.io/badge/platform-Android%208.0%2B-3DDC84)]()
-[![Language](https://img.shields.io/badge/language-Kotlin-7F52FF)]()
+[![Adaptive](https://img.shields.io/badge/adaptive-Phone%20%7C%20Tablet%20%7C%20Foldable%20%7C%20DeX-8B5CF6)]()
 
-本项目参考并部分移植自 [Aegisub](https://github.com/TypesettingTools/Aegisub)（跨平台高级字幕编辑器，BSD 许可），目标是把桌面端的核心字幕工程能力完整带到 Android：字幕/样式/标签/时间轴编辑、Karaoke、打轴辅助，并充分利用 Android 平台能力（响应式布局、Media3、外接键鼠、DeX）。
+A ground-up Android subtitle studio faithfully replicating **[samgum/Aegisub (Aegisub SGMY)](https://github.com/samgum/Aegisub)** — bringing every custom SGMY workflow, classical desktop Aegisub typesetting/timing power, and **first-class adaptive UI/UX across phones, tablets, desktop mode (Samsung DeX), and foldable postures (Tabletop & Book)** into a unified single-screen workspace.
 
-**作者 / 维护**：伤感咩吖
+**Author / Maintainer**: 伤感咩吖 (`samgum`)
 
 ---
 
-## ✨ 特性
+## ✨ Highlights
 
-**已交付（Phase 0–7 核心闭环 + Phase 8 桌面端复刻）**
+### 1. 1:1 Parity with `samgum/Aegisub` (SGMY Exclusive Features)
+- **Fix Common Errors (`Tools → Fix Common Errors`)**: Subtitle Edit-style batch pass fixing overlapping display times, short gaps, short/long durations, trailing whitespace (including full-width `U+3000`), and ASS whitespace-only empty lines (while preserving `template*` automation and `\p1` vector drawings). Commits timing, text, and line removals as independent undo steps.
+- **Music Lyrics Scroll Generator (`Tools → Lyric Scroll`)**: Generates Apple Music / player-style multi-line scrolling lyrics with cubic ease-out `\move` + `\t(\alpha\1c\fscx\fscy)` transitions, automatic `ScrollCurrent` & `ScrollDim` styles, single or auto-paired bilingual lines, and 7 resolution presets (`PlayRes`, `4K 2160p`, `1080p`, `720p`, vertical `1080×1920`, vertical `720×1280`, custom).
+- **CJK Text Suite**:
+  - **Chinese Simplified ↔ Traditional Conversion** powered by Android ICU `Transliterator` + curated phrase dictionary, skipping `{...}` ASS override blocks with per-style & selection scoping.
+  - **Subtitle Text Cleanup**: replaces full-width commas, smart-cleans Chinese periods, normalizes smart quotes, and collapses double spaces without touching ASS tags.
+  - **Paired Punctuation Checker**: stack-based validation for `()`, `[]`, `{}`, `（）`, `【】`, `《》`, `〈〉`, `「」`, `『』`, and quotes, with 1-tap row jump.
+  - **Japanese Furigana Annotator**: extracts kanji occurrences, generates `@row#occ:kanji=reading` & global templates, supports Hiragana/Katakana, above/below ruby placement, and idempotent `{*sgmy-furigana}` re-editing.
+- **Timing Stitcher & Same-Style Overlap Checker**: snaps micro-gaps by milliseconds or video frame boundaries (`Previous End` or `Next Start` anchor) and audits exact/start/end/crossing overlaps per style.
+- **Enhanced LRC & TTML Formats**:
+  - **Enhanced LRC**: `[offset:+/-ms]`, `<mm:ss.xx>` inline word/syllable karaoke → `{\kf}`, Apple Music trailing line-end timestamps, untimed LRC fallback, and bidirectional karaoke LRC export.
+  - **TTML / iTunes Timed Text (`.ttml` / `.dfxp`)**: clock & offset timestamps, `<span begin/end>` word-level karaoke → `{\kf}`, and Apple Music `ttm:role="x-bg"` background vocal splitting.
+- **Subtitle Overflow & High-CPS Highlighting**: real-time PlayRes width estimation honoring inline `\fs`, `\fscx`, `\fsp`, `\pos`, `\move`, and `WrapStyle`, highlighting overflowing lines directly in the grid and edit box.
+- **HDR / Dolby Vision / BT.2020 Video Support & Speed Control**: detects HDR10 (PQ), HLG, and Dolby Vision color metadata with a live HUD badge, optional 1080p preview downscaling for 4K HDR sources, and **0.25×–4.0× pitch-preserving playback speed**.
+- **AI Subtitle Grammar Analysis, Translation & Polish**: built-in OpenAI-compatible client with presets for **DeepSeek**, **OpenRouter**, **Gemini**, **Alibaba Bailian (DashScope)**, and custom endpoints; API keys stay strictly in volatile session memory.
 
-- **多格式**：ASS / SSA / SRT / LRC / TXT，导入导出双向，自动识别与统一格式。
-- **无损精度**：内部以微秒存储时间，ASS 厘秒 / 毫秒 / 自动三档导出精度，往返零精度损失。
-- **LRC 全格式**：支持 `[mm:ss.xx]` `[mm:ss.xxx]` `[mm:ss:xx]` `[mm:ss:xxx]` 及混合格式文件。
-- **专业编辑**：撤销重做（CoW 快照，有界内存治理）、历史版本恢复、防抖自动保存、查找替换（正则）、**行级操作（复制/删除/插入/分割/合并/上下移）**、批量操作（时间偏移 / 删除空行 / 样式批量替换）、**排序（起止/样式/演员/效果/文本/层）、帧率转换**。
-- **脚本属性**：编辑 Title / PlayResX/Y / WrapStyle / ScaledBorderAndShadow / Collisions / Timer。
-- **样式编辑器**：名称 / 字体 / 字号 / 四色 RGBA / 粗斜下划删除线 / 九宫对齐 / L-R-V 边距 / 描边阴影 / 边框类型 / 缩放间距旋转 / 编码，全字段编辑。
-- **助手工具**：**样式助手**（逐行套样式）、**翻译助手**（原文→Name/译文→Text）、**Karaoke 音节生成**（{\k}/{\kf}，按词/按字，时长均匀分配）。
-- **可视化打字**：视频画面拖拽设 {\pos}（脚本坐标系映射，松手提交单撤销点）、{\fr} 旋转滑块。
-- **多媒体**：视频预览（Media3/ExoPlayer）、音频波形 + 频谱热图双视图（radix-2 FFT）、逐帧（FPS 检测）、打轴辅助（WASD 踩点 + 拖拽手柄 + 帧级微调）。
-- **响应式**：手机 / 平板 / 横竖屏，按用户布局偏好或屏宽断点分派 compact/expanded。
-- **首选项**：主题 / 导出精度 / 布局，DataStore 持久化。
-- **超大文件**：虚拟列表 + 结构共享撤销引擎，常规规模流畅可编辑。
+### 2. Complete Desktop Aegisub Studio Workspace
+- **Unified Studio Architecture**: replaces the legacy disconnected two-screen design with a single reactive `WorkspaceScreen` where video stage, audio box, edit box, and subtitle grid stay synchronized in real time.
+- **Aspect-Locked Video Stage & 8 Visual Typesetting Tools**:
+  - Fixes letterbox coordinate distortion by locking `SubtitleOverlay` and `VisualTypesettingOverlay` strictly to the true video / `PlayResX:PlayResY` frame, with pinch-to-zoom (`50%–300%`), overscan safe-area guides, and a checkerboard dummy video canvas when no media is loaded.
+  - All 8 desktop visual tools: **Crosshair**, **`\pos` Drag**, **`\move` Dual-Handle Path**, **`\frz` Rotation**, **3D `\frx/\fry` + `\org` Origin**, **`\fscx/\fscy` Scale**, **Rectangular `\clip/\iclip`**, and **Vector Polygon `\clip/\iclip`**.
+  - Live interpolation of `\move`, `\fad`/`\fade`, `\t(t1,t2,accel,\tags)`, multi-color spans, and `\kf` karaoke sweeps.
+- **Zoomable Audio Timing Deck (`AegisubAudioBox`)**:
+  - Streaming OOM-safe waveform peak extraction + bounded STFT spectrogram heatmap + hardware sync-frame keyframe detection (`# keyframe format v1` import/export & snap).
+  - Zoomable `2s–60s` sliding viewport with time ruler, ghost neighbor lines, red Start / orange End drag handles, lead-in/out buttons, 500ms before/after/first/last segment audition, and interactive karaoke syllable boundary dragging.
+- **Syntax-Highlighted ASS Edit Box & Full Grid**:
+  - Zero-offset `VisualTransformation` highlighting `{...}` override blocks, `\tag` commands, and `\N`/`\h` escapes without IME cursor drift.
+  - Dual-pane **Global Style Storage + Script Styles Manager**, Styling Assistant, Translation Assistant, Kanji Timer, Select Lines, Paste Over, Fonts Collector, Resolution Resampler, Framerate Converter, Shift Times, Timing Post-Processor, History Snapshots, Bookmarks, and 34 customizable hardware keyboard hotkeys.
 
-完整功能比对（已实现 / 部分 / 缺口）见 [docs/COMPARISON.md](docs/COMPARISON.md)。
+---
 
-**进行中（Phase 9 第二轮复刻）**：字幕网格多选批量、Karaoke 交互式计时、{\move}/{\fad}/{\clip} 可视化、关键帧吸附、时间后处理（去重叠/lead-in-out）、分辨率重采样器。
+## 📱 Adaptive Layouts: Phone, Tablet, Foldable & DeX
 
-**远期预留**：Lua Automation、插件系统、libass JNI 精确渲染、AI 辅助字幕、持久向量（bit-partitioned trie）支撑 10 万行级。
+Powered by Jetpack `WindowInfoTracker` and `FoldingFeature`, the workspace automatically adapts across **5 hardware postures** (and allows manual override in Preferences):
 
-## 🏗️ 架构
-
-多模块 Gradle，业务逻辑全部下沉到 `:core:*`，UI 层纯展示（黑盒架构）：
-
-| 模块 | 职责 | 阶段 |
+| Posture | Target Form Factors | Studio Layout |
 |---|---|---|
-| `:core:domain` | 纯 Kotlin/JVM：时间/数据模型/tokenizer/格式编解码/撤销引擎 | **Phase 0** |
-| `:core:data` | Room + DataStore：项目管理 / 自动保存 / 历史版本 | Phase 1 |
-| `:core:media` | Media3 / ExoPlayer + 音频波形提取 | Phase 3-4 |
-| `:core:ass-render` | libass JNI 桥（预留） | 远期 |
-| `:feature:*` | Compose UI：字幕列表 / 编辑底栏 / 双栏布局（`:feature:editor`）/ 视频预览+字幕叠加（`:feature:preview`） | Phase 2-3 |
-| `:app` | 应用入口 + 导航 + Hilt DI + 响应式布局 | Phase 1+ |
+| **`DESKTOP_THREE_ZONE`** | Tablets (`≥ 840dp`), Unfolded Flat Foldables, Samsung DeX / Desktop Windowing | Classic desktop Aegisub menu + icon toolbar; resizable upper split (**Video Stage** left \| **Audio Box + ASS Edit Box** right) over a resizable full-width **9-column Subtitle Grid**. |
+| **`BOOK_DUAL_PANE`** | Foldables with vertical separating hinge (`HALF_OPENED` / `isSeparating`) | **Left page**: Video Stage + Audio Timing Deck · **Hinge-safe gutter** · **Right page**: Toolbar + ASS Edit Box + Subtitle Grid. |
+| **`TABLETOP`** | Foldables half-opened horizontally on a desk (`HALF_OPENED + HORIZONTAL`) | **Upper upright screen**: unobstructed Video Stage · **Hinge-safe gutter** · **Lower flat console**: touch Audio Timing Deck, Edit Box, and Grid tabs. |
+| **`LANDSCAPE_SPLIT`** | Phones in landscape & compact tablets (`600–839dp`) | Compact studio bar + draggable two-column split (**Video + Audio** left \| **Edit Box + Grid** right). |
+| **`PHONE_COMPACT`** | Phones in portrait (`< 600dp`) | Single-screen studio with instant stage switcher (**Video+Audio** / **Audio Timing** / **Visual Typesetting** / **Text Focus**), inline ASS Edit Box, high-density 2-line cards, and thumb navigation bar. |
 
-详见 [核心设计 Spec](docs/superpowers/specs/2026-06-13-aegisub-android-core-design.md) 与 [Roadmap](ROADMAP.md)。
+---
 
-## 🧱 技术栈
+## 📂 Supported Formats
 
-Kotlin · Jetpack Compose · Material3 · MVVM · Coroutines · Flow · Room · DataStore · Media3 / ExoPlayer · Hilt · `kotlinx.collections.immutable`
+| Format | Extensions | Read | Write | Notes |
+|---|---|---|---|---|
+| **ASS** | `.ass` | ✅ | ✅ | Lossless styles, `[Script Info]`, override tags, vector drawings, microsecond internal precision |
+| **SSA** | `.ssa` | ✅ | ✅ | SubStation Alpha v4.00 style & alignment conversion |
+| **SRT** | `.srt` | ✅ | ✅ | SubRip timestamps & multi-line events |
+| **WebVTT** | `.vtt` | ✅ | ✅ | HTML5 Web Video Text Tracks |
+| **TTML / DFXP** | `.ttml`, `.dfxp`, `.xml` | ✅ | ✅ | SGMY word-level `<span>` karaoke & Apple Music `ttm:role="x-bg"` harmony splitting |
+| **Enhanced LRC** | `.lrc` | ✅ | ✅ | Standard `[mm:ss.xx]`, `[offset:]`, SGMY `<mm:ss.xx>` syllable karaoke, Apple Music end markers |
+| **MicroDVD** | `.sub` | ✅ | ✅ | `{startFrame}{endFrame}` frame-based subtitles |
+| **Plain Text** | `.txt` | ✅ | ✅ | Clean dialogue script import/export |
 
-## 📐 平板布局
+---
 
+## 🏗️ Project Architecture
+
+```text
+aegisub-android/
+├── core/domain/      # Pure Kotlin/JVM subtitle engine: models, parsers, 8 formats, SGMY tools, undo stack
+├── core/data/        # Room (projects, snapshots, bookmarks), DataStore settings/hotkeys, SGMY AI client
+├── feature/preview/  # Media3 HDR-aware player, streaming waveform/STFT/keyframes, aspect-locked overlays, AudioBox
+├── feature/editor/   # Dual-pane Global + Script Style Manager, Styling & Translation Assistants
+└── app/              # Unified Adaptive WorkspaceScreen (5 postures), 27 SGMY/Desktop dialogs, Home, Settings
 ```
-┌──────────┬───────────────────────┬──────────────┐
-│ 字幕列表  │      视频预览          │  属性编辑器   │
-│          ├───────────────────────┤              │
-│          │      时间轴 / 波形      │              │
-└──────────┴───────────────────────┴──────────────┘
+
+Full feature comparison with desktop Aegisub & SGMY: [docs/COMPARISON.md](docs/COMPARISON.md) · Milestone history: [ROADMAP.md](ROADMAP.md).
+
+---
+
+## 🛠️ Building & Testing
+
+### Prerequisites
+- **JDK 17**
+- **Android SDK 35** (`platforms;android-35`, `build-tools;35.0.0`)
+
+### Commands
+```bash
+# Run all unit tests across :core:domain (JUnit 5), :core:data, :feature:*, and :app
+./gradlew test
+
+# Build installable Debug APK (output: app/build/outputs/apk/debug/app-debug.apk)
+./gradlew assembleDebug
 ```
 
-## 📜 许可证
+---
 
-[BSD (Aegisub License)](LICENCE)。参考 / 移植自 Aegisub 的文件保留其版权声明；原创代码署名伤感咩吖。
+## 📜 License
+
+Released under the **BSD 3-Clause (Aegisub Compatible)** license — see [LICENCE](LICENCE).
+Ported and adapted from [samgum/Aegisub](https://github.com/samgum/Aegisub) and upstream [Aegisub](http://aegisub.org). Original Android & SGMY engineering by **伤感咩吖 (`samgum`)**.
